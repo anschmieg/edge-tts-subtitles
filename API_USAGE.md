@@ -44,12 +44,14 @@ You can optionally enable LLM preprocessing to optimize text for TTS or add SSML
 ```
 
 When `optimize_for_tts` is enabled, the LLM will:
+
 - Replace uncommon characters with spoken equivalents
 - Simplify lists and bullet points to natural prose
 - Expand abbreviations and acronyms
 - Fix typos and formatting issues
 
 When `add_ssml_markup` is enabled, the LLM will:
+
 - Add break tags for natural pauses
 - Add emphasis tags for important words
 - Add prosody adjustments for specific phrases

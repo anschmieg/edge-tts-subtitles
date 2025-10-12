@@ -6,15 +6,15 @@
 npm install
 ```
 
-2. Run locally (Wrangler Dev):
+1. Run locally (Wrangler Dev):
 
 ```bash
 npx wrangler dev
 ```
 
-3. Open the demo at `http://localhost:8787/` and the interactive API docs at `http://localhost:8787/docs`.
+1. Open the demo at `http://localhost:8787/` and the interactive API docs at `http://localhost:8787/docs`.
 
-4. Deploy:
+1. Deploy:
 
 ```bash
 wrangler deploy

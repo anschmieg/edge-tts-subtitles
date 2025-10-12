@@ -1,6 +1,7 @@
 # Implementation notes
 
 Key files:
+
 - `src/index.ts` — worker entry and route handling
 - `src/demo.ts` — demo page HTML + client script
 - `src/types.ts` — request interfaces

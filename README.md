@@ -52,6 +52,7 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
   "subtitle_content": "WEBVTT subtitle content"
 }
 ```
+
 See the `docs/` folder for focused documentation. Start at `docs/index.md`.
 
 Interactive API docs (Swagger UI) are available at `/docs` when the worker is running. The OpenAPI spec is available at `/openapi.json`.
