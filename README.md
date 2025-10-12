@@ -6,6 +6,7 @@ A high-performance Cloudflare Worker that provides free, high-quality Text-to-Sp
 
 - 🎤 **OpenAI-Compatible Endpoint** - Drop-in replacement for OpenAI's TTS API
 - 📝 **Subtitle Generation** - Automatic word-level timing for SRT and VTT formats
+- **Prosody Controls** - You can optionally set `rate`, `pitch`, and `volume` or provide raw SSML via `raw_ssml`
 - 🌍 **Multiple Languages** - Support for 100+ voices in various languages
 - ⚡ **Serverless** - Runs on Cloudflare's global edge network
 - 🆓 **Free** - No API key required, leverages Microsoft Edge TTS
@@ -20,7 +21,7 @@ Returns raw MP3 audio data.
 ```bash
 curl -X POST https://your-worker.workers.dev/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"input": "Hello, world!", "voice": "en-US-EmmaMultilingualNeural"}' \
+  -d '{"input": "Hello, world!", "voice": "en-US-EmmaMultilingualNeural", "rate": "1.0", "pitch": "+2st"}' \
   --output output.mp3
 ```
 
@@ -34,11 +35,15 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
   -d '{
     "input": "Hello, world!",
     "voice": "en-US-EmmaMultilingualNeural",
-    "subtitle_format": "vtt"
+    "subtitle_format": "vtt",
+    "rate": "1.0",
+    "pitch": "+2st",
+    "volume": "loud"
   }'
 ```
 
 **Response:**
+
 ```json
 {
   "audio_content_base64": "base64-encoded MP3 data",
@@ -49,6 +54,9 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
 
 See [API_USAGE.md](./API_USAGE.md) for detailed documentation and examples.
 
+Prosody normalization: numeric rates (`1.2`) are converted to percent (`120%`), numeric pitch values (`2`) become semitone offsets (`+2st`), and numeric volume 0-1 becomes percent (e.g. `0.8` -> `80%`). Use `raw_ssml` to bypass normalization.
+
+Interactive API docs (Swagger UI) are available at `/docs` when the worker is running. The OpenAPI spec is available at `/openapi.json`.
 
 ## Get started
 
@@ -62,6 +70,8 @@ See [API_USAGE.md](./API_USAGE.md) for detailed documentation and examples.
 1. Run `wrangler dev` to start a local instance of the API.
 2. Test the endpoints using curl or your favorite HTTP client.
 3. Changes made in the `src/` folder will automatically trigger the server to reload.
+
+The demo UI is served from the worker root (GET `/`) and the single source-of-truth page lives in `src/demo.ts`.
 
 ## Technical Details
 

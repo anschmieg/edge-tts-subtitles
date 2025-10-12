@@ -11,6 +11,7 @@ Returns raw MP3 audio data.
 **Method:** `POST`
 
 **Request Body:**
+
 ```json
 {
   "input": "Text to convert to speech",
@@ -18,11 +19,32 @@ Returns raw MP3 audio data.
 }
 ```
 
+You can also control prosody and provide raw SSML. Supported optional fields:
+
+```json
+{
+  "rate": "1.0",        // e.g. '0.9', '1.2', 'slow', 'fast'
+  "pitch": "+2st",      // e.g. '+2st', '-1st', 'low'
+  
+For a browsable API specification and interactive UI, open `/docs` on your worker (for local dev: `http://localhost:8787/docs`). The OpenAPI JSON is available at `/openapi.json`.
+  "volume": "loud",     // e.g. 'x-soft', 'medium', 'loud'
+  "raw_ssml": "<speak>...</speak>" // optional: raw SSML takes precedence
+}
+```
+
+Normalization rules:
+
+- `rate`: numeric values like `1.2` are converted to percent (`120%`). Keywords such as `slow`, `fast`, `x-slow` are passed through.
+- `pitch`: numeric values like `2` are converted to semitones `+2st`. Accepts `+2st`, `-1st`, `low`, `high`.
+- `volume`: accepts keywords (`x-soft`, `medium`, `loud`), decibels (`-6dB`) or percent values. Numeric 0-1 values convert to percent (`0.8` -> `80%`).
+
 **Response:**
+
 - **Content-Type:** `audio/mpeg`
 - **Body:** Raw MP3 audio data
 
 **Example using curl:**
+
 ```bash
 curl -X POST https://your-worker.workers.dev/v1/audio/speech \
   -H "Content-Type: application/json" \
@@ -37,17 +59,23 @@ Returns JSON with base64-encoded audio and synchronized subtitles.
 **Method:** `POST`
 
 **Request Body:**
+
 ```json
 {
   "input": "Text to convert to speech",
   "voice": "en-US-EmmaMultilingualNeural",
-  "subtitle_format": "srt"  // optional: "srt" or "vtt", defaults to "srt"
+  "subtitle_format": "srt",  // optional: "srt" or "vtt", defaults to "srt"
+  "rate": "1.0",
+  "pitch": "+2st",
+  "volume": "medium"
 }
 ```
 
 **Response:**
+
 - **Content-Type:** `application/json`
 - **Body:**
+
 ```json
 {
   "audio_content_base64": "base64-encoded MP3 audio data",
@@ -57,6 +85,7 @@ Returns JSON with base64-encoded audio and synchronized subtitles.
 ```
 
 **Example using curl:**
+
 ```bash
 curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
   -H "Content-Type: application/json" \
@@ -68,6 +97,7 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
 ```
 
 **Example Response:**
+
 ```json
 {
   "audio_content_base64": "//uQxAAAAAAAAAAA...",
@@ -81,16 +111,19 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
 Some common voices you can use:
 
 ### English (US)
+
 - `en-US-EmmaMultilingualNeural` (Female)
 - `en-US-AndrewMultilingualNeural` (Male)
 - `en-US-AvaMultilingualNeural` (Female)
 - `en-US-BrianMultilingualNeural` (Male)
 
 ### English (UK)
+
 - `en-GB-SoniaNeural` (Female)
 - `en-GB-RyanNeural` (Male)
 
 ### Other Languages
+
 - `es-ES-ElviraNeural` (Spanish, Female)
 - `fr-FR-DeniseNeural` (French, Female)
 - `de-DE-KatjaNeural` (German, Female)
@@ -106,6 +139,7 @@ Both endpoints support CORS with `Access-Control-Allow-Origin: *` headers, allow
 ## Error Handling
 
 All endpoints return appropriate HTTP status codes:
+
 - `200` - Success
 - `400` - Bad Request (missing required fields)
 - `405` - Method Not Allowed (non-POST requests)
@@ -113,6 +147,7 @@ All endpoints return appropriate HTTP status codes:
 - `500` - Internal Server Error
 
 Error responses include a JSON body with error details:
+
 ```json
 {
   "error": "Error type",
@@ -123,7 +158,8 @@ Error responses include a JSON body with error details:
 ## Subtitle Formats
 
 ### SRT (SubRip)
-```
+
+```srt
 1
 00:00:00,000 --> 00:00:00,500
 Hello,
@@ -134,7 +170,8 @@ world!
 ```
 
 ### VTT (WebVTT)
-```
+
+```vtt
 WEBVTT
 
 00:00:00.000 --> 00:00:00.500

@@ -1,6 +1,6 @@
 # API Architecture
 
-```
+```diagram
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         Client Application                          │
 │                   (Browser, Node.js, Python, etc.)                  │
@@ -60,7 +60,7 @@
 ## Request Flow
 
 ### Endpoint 1: `/v1/audio/speech`
-```
+
 1. Client sends POST: { "input": "text", "voice": "voice-name" }
 2. Worker validates request
 3. Worker creates EdgeTTS instance
@@ -68,10 +68,9 @@
 5. Microsoft generates audio + metadata
 6. Worker receives audio chunks
 7. Worker returns raw MP3 audio
-```
 
 ### Endpoint 2: `/v1/audio/speech_subtitles`
-```
+
 1. Client sends POST: { "input": "text", "voice": "voice-name", "subtitle_format": "srt" }
 2. Worker validates request
 3. Worker creates EdgeTTS instance
@@ -81,11 +80,25 @@
 7. Worker converts audio to base64
 8. Worker generates SRT/VTT subtitles from timing data
 9. Worker returns JSON: { audio_content_base64, subtitle_format, subtitle_content }
-```
+
+## Prosody & SSML
+
+The worker supports optional prosody controls that let callers adjust speech rate, pitch, and volume. Supported request fields:
+
+- `rate` — examples: `1.0`, `0.9`, `1.2`, `slow`, `fast`
+- `pitch` — examples: `+2st`, `-1st`, `low`, `high`
+- `volume` — examples: `x-soft`, `medium`, `loud`
+- `raw_ssml` — when provided the worker will use this SSML string directly and skip prosody wrapping
+
+When prosody fields are provided (and `raw_ssml` is not), the worker wraps the plain text into SSML using a `<prosody>` tag and passes that SSML to the TTS engine. `raw_ssml` takes precedence and is useful for advanced control.
+
+## Demo UI
+
+The demo UI is served from the worker root (GET `/`) and is stored as a single source-of-truth module at `src/demo.ts`. The demo uses same-origin calls (relative paths) so it automatically targets the worker that served the page.
 
 ## Data Flow
 
-```
+```diagram
 Input Text
     │
     ▼
