@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge TTS Subtitles Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, textarea, select, button {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #0070f3;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0051cc;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        pre {
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎤 Edge TTS Subtitles Demo</h1>
+    <p>Generate speech audio with synchronized subtitles using Microsoft Edge TTS.</p>
+
+    <form id="ttsForm">
+        <div class="form-group">
+            <label for="workerUrl">Worker URL:</label>
+            <input type="text" id="workerUrl" placeholder="https://your-worker.workers.dev" required>
+        </div>
+
+        <div class="form-group">
+            <label for="text">Text to speak:</label>
+            <textarea id="text" placeholder="Enter the text you want to convert to speech..." required>Hello, world! This is a demonstration of the Edge TTS API with subtitle generation.</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="voice">Voice:</label>
+            <select id="voice">
+                <option value="en-US-EmmaMultilingualNeural">Emma (US English, Female)</option>
+                <option value="en-US-AndrewMultilingualNeural">Andrew (US English, Male)</option>
+                <option value="en-GB-SoniaNeural">Sonia (UK English, Female)</option>
+                <option value="en-GB-RyanNeural">Ryan (UK English, Male)</option>
+                <option value="es-ES-ElviraNeural">Elvira (Spanish, Female)</option>
+                <option value="fr-FR-DeniseNeural">Denise (French, Female)</option>
+                <option value="de-DE-KatjaNeural">Katja (German, Female)</option>
+                <option value="ja-JP-NanamiNeural">Nanami (Japanese, Female)</option>
+                <option value="zh-CN-XiaoxiaoNeural">Xiaoxiao (Chinese, Female)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="format">Subtitle Format:</label>
+            <select id="format">
+                <option value="srt">SRT (SubRip)</option>
+                <option value="vtt">VTT (WebVTT)</option>
+            </select>
+        </div>
+
+        <button type="submit" id="generateBtn">Generate Speech & Subtitles</button>
+    </form>
+
+    <div id="result" class="result">
+        <h2>Result</h2>
+        <div id="audioContainer"></div>
+        <div id="subtitlesContainer"></div>
+    </div>
+
+    <div id="error" class="error" style="display: none;"></div>
+
+    <script>
+        const form = document.getElementById('ttsForm');
+        const resultDiv = document.getElementById('result');
+        const audioContainer = document.getElementById('audioContainer');
+        const subtitlesContainer = document.getElementById('subtitlesContainer');
+        const errorDiv = document.getElementById('error');
+        const generateBtn = document.getElementById('generateBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Hide previous results and errors
+            resultDiv.classList.remove('show');
+            errorDiv.style.display = 'none';
+            
+            // Disable button and show loading state
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+            
+            const workerUrl = document.getElementById('workerUrl').value;
+            const text = document.getElementById('text').value;
+            const voice = document.getElementById('voice').value;
+            const format = document.getElementById('format').value;
+            
+            try {
+                const response = await fetch(`${workerUrl}/v1/audio/speech_subtitles`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        input: text,
+                        voice: voice,
+                        subtitle_format: format
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Request failed');
+                }
+                
+                const data = await response.json();
+                
+                // Convert base64 to blob for audio playback
+                const audioBlob = base64ToBlob(data.audio_content_base64, 'audio/mpeg');
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Display audio player
+                audioContainer.innerHTML = `
+                    <h3>🔊 Audio</h3>
+                    <audio controls src="${audioUrl}"></audio>
+                    <p><a href="${audioUrl}" download="speech.mp3">Download MP3</a></p>
+                `;
+                
+                // Display subtitles
+                subtitlesContainer.innerHTML = `
+                    <h3>📝 Subtitles (${data.subtitle_format.toUpperCase()})</h3>
+                    <pre>${escapeHtml(data.subtitle_content)}</pre>
+                `;
+                
+                resultDiv.classList.add('show');
+                
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Speech & Subtitles';
+            }
+        });
+        
+        function base64ToBlob(base64, contentType) {
+            const byteCharacters = atob(base64);
+            const byteArrays = [];
+            
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteArrays.push(byteCharacters.charCodeAt(i));
+            }
+            
+            const byteArray = new Uint8Array(byteArrays);
+            return new Blob([byteArray], { type: contentType });
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
