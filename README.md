@@ -52,27 +52,7 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
   "subtitle_content": "WEBVTT subtitle content"
 }
 ```
-
-See [API_USAGE.md](./API_USAGE.md) for detailed documentation and examples.
-
-### Optional LLM Preprocessing
-
-Both endpoints support optional LLM-powered text optimization and SSML markup generation. See [LLM_PREPROCESSING_EXAMPLES.md](./LLM_PREPROCESSING_EXAMPLES.md) for detailed examples.
-
-```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "Hello! Check the README.md ASAP.",
-    "voice": "en-US-EmmaMultilingualNeural",
-    "llm_api_key": "sk-your-api-key",
-    "llm_endpoint": "https://api.openai.com/v1/chat/completions",
-    "optimize_for_tts": true,
-    "add_ssml_markup": true
-  }'
-```
-
-Prosody normalization: numeric rates (`1.2`) are converted to percent (`120%`), numeric pitch values (`2`) become semitone offsets (`+2st`), and numeric volume 0-1 becomes percent (e.g. `0.8` -> `80%`). Use `raw_ssml` to bypass normalization.
+See the `docs/` folder for focused documentation. Start at `docs/index.md`.
 
 Interactive API docs (Swagger UI) are available at `/docs` when the worker is running. The OpenAPI spec is available at `/openapi.json`.
 
