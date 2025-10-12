@@ -140,21 +140,54 @@ Common errors:
 
 ### Text Optimization Prompt
 
-The LLM uses a specialized system prompt to:
-- Replace uncommon characters with spoken equivalents
-- Simplify lists and bullet points to natural prose
-- Expand abbreviations and acronyms
-- Fix typos and formatting issues
-- Ensure punctuation supports natural speech rhythm
+The LLM uses a comprehensive system prompt to:
+- Replace uncommon characters and symbols with spoken equivalents (@ → "at", & → "and", # → "number")
+- Expand abbreviations context-aware (Dr. → Doctor, re: → regarding, w/ → with)
+- Transform lists and bullet points into natural prose using connectors
+- Handle numbers, dates, and phone numbers appropriately
+- Fix typos and excessive punctuation
+- Preserve proper nouns, brand names, and technical terms
+- Maintain sentence boundaries and logical structure
 
 ### SSML Markup Prompt
 
-The LLM uses a specialized system prompt to:
-- Add `<break>` tags for natural pauses
-- Add `<emphasis>` tags for important words
-- Add `<prosody>` tags for rate/pitch/volume adjustments
-- Add `<say-as>` tags for dates, times, numbers
-- Validate SSML structure and tag nesting
+The LLM uses a detailed system prompt with specific heuristics:
+
+**Break Tags** - Strategic pauses:
+- After sentences (500ms), commas (200ms), paragraphs (800ms)
+- Before important information (strong strength)
+
+**Emphasis Tags** - Highlighting key information:
+- Strong emphasis for critical words
+- Moderate for important points
+- Reduced for parentheticals
+- Limited to 2-3 per sentence to avoid over-markup
+
+**Say-As Tags** - Accurate pronunciation:
+- Dates, times, numbers (cardinal/ordinal)
+- Phone numbers, currency
+- Character-by-character for acronyms
+
+**Prosody Tags** - Speech characteristics:
+- Rate adjustments (slow for complex info, fast for asides)
+- Pitch modulation (lower for warnings, higher for excitement)
+- Volume control where appropriate
+
+**Smart Heuristics**:
+- Questions get upward pitch
+- Exclamations add emphasis + breaks
+- Punctuation-based break insertion
+- Multi-digit numbers use say-as tags
+- Acronyms (2-4 caps) spelled out
+
+**Self-Closing Tags**:
+- Uses proper self-closing format: `<break time="300ms"/>`
+- Prevents validation errors from improperly closed tags
+
+**Validation**:
+- Ensures `<speak>` wrapper is present
+- Validates tag balance (accounting for self-closing tags)
+- Prevents malformed SSML from reaching TTS engine
 
 ## Best Practices
 

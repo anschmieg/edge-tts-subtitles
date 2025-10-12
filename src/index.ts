@@ -24,20 +24,46 @@ function escapeXml(str: string): string {
  * Call OpenAI-compatible LLM endpoint to optimize text for TTS
  */
 async function optimizeTextForTTS(text: string, apiKey: string, endpoint: string): Promise<string> {
-	const systemPrompt = `You are a text optimization assistant for Text-to-Speech (TTS) systems. Your task is to optimize the input text for natural and clear TTS output while preserving the original meaning and intent.
+	const systemPrompt = `You are a text optimization specialist for Text-to-Speech (TTS) systems. Your task is to transform input text into speech-friendly format while preserving meaning and naturalness.
 
-Guidelines:
-1. Replace uncommon characters, symbols, and special formatting with their spoken equivalents
-2. Simplify complex lists and bullet points to natural prose without being overly invasive
-3. Expand abbreviations and acronyms where appropriate for clarity
-4. Fix obvious typos and formatting issues
-5. Ensure punctuation supports natural speech rhythm
-6. Keep the text concise and conversational
-7. Do NOT change the fundamental meaning or remove important information
-8. Do NOT add extra commentary or explanations
-9. Return ONLY the optimized text, nothing else
+OPTIMIZATION RULES:
+1. Character & Symbol Replacement:
+   - Replace @ with "at", & with "and", # with "number"
+   - Convert % to "percent", $ to "dollars"
+   - Replace / with "slash" or "or" depending on context
+   - Convert common emojis to their spoken equivalents
+   - Spell out unusual Unicode characters
 
-Output the optimized text directly without any preamble or explanation.`;
+2. Abbreviations & Acronyms:
+   - Expand common abbreviations: "Dr." → "Doctor", "St." → "Street"
+   - For known acronyms (NASA, FBI), keep uppercase if commonly spoken as word
+   - For unknown acronyms, add spaces: "TBD" → "T B D"
+   - Context-aware: "re:" → "regarding", "w/" → "with", "vs" → "versus"
+
+3. Lists & Formatting:
+   - Convert bullet points to natural prose with "first, second, third" or "including"
+   - Transform numbered lists into flowing sentences
+   - Replace markdown/formatting with plain text equivalents
+   - Keep the logical structure but make it conversational
+
+4. Numbers & Dates:
+   - Keep numbers as digits (TTS handles these well)
+   - Format phone numbers with spaces: "555-1234" → "555 1234"
+   - Years stay numeric: "2024" not "two thousand twenty-four"
+
+5. Punctuation & Flow:
+   - Add commas for natural breathing pauses
+   - Convert multiple exclamation marks to single
+   - Replace ellipsis (...) with period or comma
+   - Remove excessive capitalization (unless proper nouns)
+
+6. Preserve:
+   - Original meaning and intent
+   - Proper nouns and brand names
+   - Technical terms when appropriate
+   - Sentence boundaries and paragraphs
+
+OUTPUT: Return ONLY the optimized text, no explanations or comments.`;
 
 	const response = await fetch(endpoint, {
 		method: 'POST',
@@ -74,21 +100,76 @@ Output the optimized text directly without any preamble or explanation.`;
  * Call OpenAI-compatible LLM endpoint to add SSML markup
  */
 async function addSSMLMarkup(text: string, apiKey: string, endpoint: string): Promise<string> {
-	const systemPrompt = `You are an SSML (Speech Synthesis Markup Language) expert. Your task is to add appropriate SSML markup to the input text to enforce natural pronunciation that aligns with the grammar and semantics of the text.
+	const systemPrompt = `You are an SSML (Speech Synthesis Markup Language) expert. Add appropriate SSML markup to enhance natural speech synthesis.
 
-Guidelines:
-1. Use <break> tags for natural pauses (time="300ms", strength="medium", etc.)
-2. Use <emphasis> tags for important words (level="strong", "moderate", "reduced")
-3. Use <prosody> tags to adjust rate, pitch, or volume for specific phrases when appropriate
-4. Use <say-as> tags for dates, times, numbers, and other specialized content
-5. Use <phoneme> tags ONLY when absolutely necessary for difficult pronunciations
-6. DO NOT over-markup - keep it natural and readable
-7. Ensure all SSML tags are properly closed and nested
-8. The output must be valid SSML wrapped in <speak> tags
-9. Preserve the original text content - only add markup
-10. DO NOT add explanations or comments
+SSML GUIDELINES:
 
-Output ONLY the valid SSML markup, nothing else. The output must start with <speak> and end with </speak>.`;
+1. BREAK Tags (Pauses):
+   - After sentences: <break time="500ms"/> or <break strength="medium"/>
+   - After commas in lists: <break time="200ms"/>
+   - Before important information: <break strength="strong"/>
+   - Between paragraphs: <break time="800ms"/>
+   - Use strength="weak|medium|strong|x-strong" OR time="[duration]ms"
+
+2. EMPHASIS Tags:
+   - Strong emphasis for crucial words: <emphasis level="strong">critical</emphasis>
+   - Moderate for important points: <emphasis level="moderate">important</emphasis>
+   - Reduced for parentheticals: <emphasis level="reduced">aside</emphasis>
+   - Don't overuse - max 2-3 per sentence
+
+3. SAY-AS Tags (Critical for accuracy):
+   - Dates: <say-as interpret-as="date" format="mdy">01/15/2024</say-as>
+   - Times: <say-as interpret-as="time" format="hms12">2:30pm</say-as>
+   - Numbers: <say-as interpret-as="cardinal">123</say-as>
+   - Ordinals: <say-as interpret-as="ordinal">1st</say-as>
+   - Phone: <say-as interpret-as="telephone">555-1234</say-as>
+   - Currency: <say-as interpret-as="currency">$50.00</say-as>
+   - Spell-out: <say-as interpret-as="characters">FBI</say-as>
+
+4. PROSODY Tags (Use sparingly):
+   - Slow down for complex info: <prosody rate="slow">technical term</prosody>
+   - Speed up for parentheticals: <prosody rate="fast">aside</prosody>
+   - Lower pitch for seriousness: <prosody pitch="-10%">warning</prosody>
+   - Raise pitch for excitement: <prosody pitch="+15%">great news</prosody>
+   - Adjust volume: <prosody volume="soft|medium|loud">text</prosody>
+
+5. SELF-CLOSING Tags:
+   - ALWAYS use self-closing format: <break time="300ms"/>
+   - NEVER use: <break time="300ms"></break>
+   - This applies to: <break/> tags only
+
+6. TAG NESTING Rules:
+   - CORRECT: <emphasis><prosody rate="slow">text</prosody></emphasis>
+   - WRONG: <emphasis><prosody>text</emphasis></prosody>
+   - All tags must be properly nested and closed
+
+7. Best Practices:
+   - Less is more - don't over-annotate
+   - Focus on places where TTS typically struggles
+   - Prioritize natural flow over perfect markup
+   - Keep the original text intact
+   - Test mental reading - if it sounds natural, you're done
+
+HEURISTICS TO APPLY:
+- Questions: Add slight upward pitch at end
+- Exclamations: Add emphasis + medium break after
+- Commas in sentences: Add short breaks (200ms)
+- Colons/semicolons: Add medium breaks (400ms)
+- Periods: Add medium-strong breaks (500ms)
+- Multi-digit numbers: Use say-as cardinal/ordinal
+- Dates/times: Always use say-as tags
+- Acronyms (2-4 caps): Use say-as characters
+- Lists: Add breaks between items
+
+OUTPUT FORMAT:
+- Must start with <speak> and end with </speak>
+- Must be valid, well-formed SSML
+- NO explanations, comments, or extra text
+- Preserve all original text content
+
+EXAMPLE:
+Input: "Meeting on 1/15 at 2pm. This is VERY important!"
+Output: <speak>Meeting on <say-as interpret-as="date" format="md">1/15</say-as> at <say-as interpret-as="time">2pm</say-as>.<break time="500ms"/> This is <emphasis level="strong">very important</emphasis>!</speak>`;
 
 	const response = await fetch(endpoint, {
 		method: 'POST',
@@ -123,8 +204,10 @@ Output ONLY the valid SSML markup, nothing else. The output must start with <spe
 		throw new Error('LLM API returned invalid SSML: must be wrapped in <speak> tags');
 	}
 
-	// Basic validation: check for unbalanced tags
-	const openTags = (ssmlText.match(/<([a-z]+)(\s|>)/gi) || []).length;
+	// Basic validation: check for unbalanced tags (excluding self-closing tags)
+	// Self-closing tags like <break/> should not be counted as both open and close
+	const selfClosingTags = (ssmlText.match(/<[a-z]+[^>]*\/>/gi) || []).length;
+	const openTags = (ssmlText.match(/<([a-z]+)(\s|>)/gi) || []).length - selfClosingTags;
 	const closeTags = (ssmlText.match(/<\/[a-z]+>/gi) || []).length;
 	if (openTags !== closeTags) {
 		throw new Error('LLM API returned invalid SSML: unbalanced tags detected');
