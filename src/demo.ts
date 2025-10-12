@@ -1,113 +1,34 @@
-<!DOCTYPE html>
+export const demoHtml = `<!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edge TTS Subtitles Demo</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-
-        h1 {
-            color: #333;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-
-        input,
-        textarea,
-        select,
-        button {
-            width: 100%;
-            padding: 10px;
-            font-size: 14px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
-        textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        button {
-            background-color: #0070f3;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: 500;
-            margin-top: 10px;
-        }
-
-        button:hover {
-            background-color: #0051cc;
-        }
-
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-            display: none;
-        }
-
-        .result.show {
-            display: block;
-        }
-
-        pre {
-            background-color: #fff;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-        }
-
-        audio {
-            width: 100%;
-            margin: 10px 0;
-        }
-
-        .error {
-            color: #d32f2f;
-            background-color: #ffebee;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; line-height: 1.6; }
+        h1 { color: #333; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; }
+        input, textarea, select, button { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        textarea { min-height: 100px; resize: vertical; }
+        button { background-color: #0070f3; color: white; border: none; cursor: pointer; font-weight: 500; margin-top: 10px; }
+        button:hover { background-color: #0051cc; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .result { margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 4px; display: none; }
+        .result.show { display: block; }
+        pre { background-color: #fff; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        audio { width: 100%; margin: 10px 0; }
+        .error { color: #d32f2f; background-color: #ffebee; padding: 10px; border-radius: 4px; margin-top: 10px; }
     </style>
 </head>
-
 <body>
     <h1>🎤 Edge TTS Subtitles Demo</h1>
     <p>Generate speech audio with synchronized subtitles using Microsoft Edge TTS.</p>
 
     <form id="ttsForm">
-        <!-- Worker URL removed — demo will use same-origin relative paths to call the worker -->
-
         <div class="form-group">
             <label for="text">Text to speak:</label>
-            <textarea id="text" placeholder="Enter the text you want to convert to speech..."
-                required>Hello, world! This is a demonstration of the Edge TTS API with subtitle generation.</textarea>
+            <textarea id="text" placeholder="Enter the text you want to convert to speech..." required>Hello, world! This is a demonstration of the Edge TTS API with subtitle generation.</textarea>
         </div>
 
         <div class="form-group">
@@ -123,6 +44,21 @@
                 <option value="ja-JP-NanamiNeural">Nanami (Japanese, Female)</option>
                 <option value="zh-CN-XiaoxiaoNeural">Xiaoxiao (Chinese, Female)</option>
             </select>
+        </div>
+
+        <div class="form-group">
+            <label for="rate">Rate (speed):</label>
+            <input id="rate" placeholder="e.g. 1.0 or fast" />
+        </div>
+
+        <div class="form-group">
+            <label for="pitch">Pitch:</label>
+            <input id="pitch" placeholder="e.g. +2st or low" />
+        </div>
+
+        <div class="form-group">
+            <label for="volume">Volume:</label>
+            <input id="volume" placeholder="e.g. loud or x-soft" />
         </div>
 
         <div class="form-group">
@@ -154,21 +90,22 @@
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-
+            
             // Hide previous results and errors
             resultDiv.classList.remove('show');
             errorDiv.style.display = 'none';
-
+            
             // Disable button and show loading state
             generateBtn.disabled = true;
             generateBtn.textContent = 'Generating...';
-
-            // Use same-origin worker — fetch relative paths so the page works where it's hosted
-            const workerUrl = '';
+            
             const text = document.getElementById('text').value;
             const voice = document.getElementById('voice').value;
             const format = document.getElementById('format').value;
-
+            const rate = document.getElementById('rate').value;
+            const pitch = document.getElementById('pitch').value;
+            const volume = document.getElementById('volume').value;
+            
             try {
                 const response = await fetch('/v1/audio/speech_subtitles', {
                     method: 'POST',
@@ -178,57 +115,56 @@
                     body: JSON.stringify({
                         input: text,
                         voice: voice,
-                        subtitle_format: format
+                        subtitle_format: format,
+                        rate: rate || undefined,
+                        pitch: pitch || undefined,
+                        volume: volume || undefined
                     })
                 });
-
+                
                 if (!response.ok) {
                     const error = await response.json();
                     throw new Error(error.message || 'Request failed');
                 }
-
+                
                 const data = await response.json();
-
+                
                 // Convert base64 to blob for audio playback
                 const audioBlob = base64ToBlob(data.audio_content_base64, 'audio/mpeg');
                 const audioUrl = URL.createObjectURL(audioBlob);
-
+                
                 // Display audio player
-                audioContainer.innerHTML = `
-                    <h3>🔊 Audio</h3>
-                    <audio controls src="${audioUrl}"></audio>
-                    <p><a href="${audioUrl}" download="speech.mp3">Download MP3</a></p>
-                `;
-
+                audioContainer.innerHTML = '<h3>🔊 Audio</h3>' +
+                    '<audio controls src="' + audioUrl + '"></audio>' +
+                    '<p><a href="' + audioUrl + '" download="speech.mp3">Download MP3</a></p>';
+                
                 // Display subtitles
-                subtitlesContainer.innerHTML = `
-                    <h3>📝 Subtitles (${data.subtitle_format.toUpperCase()})</h3>
-                    <pre>${escapeHtml(data.subtitle_content)}</pre>
-                `;
-
+                subtitlesContainer.innerHTML = '<h3>📝 Subtitles (' + data.subtitle_format.toUpperCase() + ')</h3>' +
+                    '<pre>' + escapeHtml(data.subtitle_content) + '</pre>';
+                
                 resultDiv.classList.add('show');
-
+                
             } catch (error) {
-                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.textContent = 'Error: ' + (error && error.message ? error.message : String(error));
                 errorDiv.style.display = 'block';
             } finally {
                 generateBtn.disabled = false;
                 generateBtn.textContent = 'Generate Speech & Subtitles';
             }
         });
-
+        
         function base64ToBlob(base64, contentType) {
             const byteCharacters = atob(base64);
             const byteArrays = [];
-
+            
             for (let i = 0; i < byteCharacters.length; i++) {
                 byteArrays.push(byteCharacters.charCodeAt(i));
             }
-
+            
             const byteArray = new Uint8Array(byteArrays);
             return new Blob([byteArray], { type: contentType });
         }
-
+        
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -236,5 +172,4 @@
         }
     </script>
 </body>
-
-</html>
+</html>`;
