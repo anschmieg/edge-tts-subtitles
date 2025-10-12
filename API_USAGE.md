@@ -25,12 +25,37 @@ You can also control prosody and provide raw SSML. Supported optional fields:
 {
   "rate": "1.0",        // e.g. '0.9', '1.2', 'slow', 'fast'
   "pitch": "+2st",      // e.g. '+2st', '-1st', 'low'
-  
-For a browsable API specification and interactive UI, open `/docs` on your worker (for local dev: `http://localhost:8787/docs`). The OpenAPI JSON is available at `/openapi.json`.
   "volume": "loud",     // e.g. 'x-soft', 'medium', 'loud'
   "raw_ssml": "<speak>...</speak>" // optional: raw SSML takes precedence
 }
 ```
+
+**LLM Preprocessing (Optional):**
+
+You can optionally enable LLM preprocessing to optimize text for TTS or add SSML markup automatically:
+
+```json
+{
+  "llm_api_key": "sk-...",              // API key for OpenAI-compatible endpoint
+  "llm_endpoint": "https://api.openai.com/v1/chat/completions", // OpenAI-compatible endpoint
+  "optimize_for_tts": true,              // Enable text optimization for TTS
+  "add_ssml_markup": true                // Enable automatic SSML markup generation
+}
+```
+
+When `optimize_for_tts` is enabled, the LLM will:
+- Replace uncommon characters with spoken equivalents
+- Simplify lists and bullet points to natural prose
+- Expand abbreviations and acronyms
+- Fix typos and formatting issues
+
+When `add_ssml_markup` is enabled, the LLM will:
+- Add break tags for natural pauses
+- Add emphasis tags for important words
+- Add prosody adjustments for specific phrases
+- Add say-as tags for dates, times, and numbers
+
+For a browsable API specification and interactive UI, open `/docs` on your worker (for local dev: `http://localhost:8787/docs`). The OpenAPI JSON is available at `/openapi.json`.
 
 Normalization rules:
 
@@ -68,6 +93,19 @@ Returns JSON with base64-encoded audio and synchronized subtitles.
   "rate": "1.0",
   "pitch": "+2st",
   "volume": "medium"
+}
+```
+
+You can also use LLM preprocessing (see above) with this endpoint:
+
+```json
+{
+  "input": "Text to convert to speech",
+  "voice": "en-US-EmmaMultilingualNeural",
+  "llm_api_key": "sk-...",
+  "llm_endpoint": "https://api.openai.com/v1/chat/completions",
+  "optimize_for_tts": true,
+  "add_ssml_markup": true
 }
 ```
 
