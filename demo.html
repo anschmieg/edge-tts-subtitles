@@ -94,6 +94,42 @@
             border-radius: 4px;
             margin-top: 10px;
         }
+
+        .toggle-section {
+            background-color: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .toggle-header {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-header input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .toggle-content {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .toggle-content.active {
+            display: block;
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 
@@ -133,6 +169,40 @@
             </select>
         </div>
 
+        <!-- LLM Preprocessing Section -->
+        <div class="toggle-section">
+            <div class="toggle-header" onclick="toggleLLMSettings()">
+                <input type="checkbox" id="enableLLM" onclick="event.stopPropagation();">
+                <label for="enableLLM" style="cursor: pointer; margin: 0;">🤖 Enable LLM Preprocessing</label>
+            </div>
+            <div id="llmContent" class="toggle-content">
+                <div class="form-group">
+                    <label for="llmEndpoint">LLM Endpoint URL:</label>
+                    <input type="text" id="llmEndpoint" placeholder="https://api.openai.com/v1/chat/completions">
+                    <div class="info-text">OpenAI-compatible endpoint (stored in LocalStorage)</div>
+                </div>
+                <div class="form-group">
+                    <label for="llmApiKey">LLM API Key:</label>
+                    <input type="password" id="llmApiKey" placeholder="sk-...">
+                    <div class="info-text">Your API key (stored in LocalStorage)</div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="optimizeForTTS" style="width: auto; display: inline;">
+                        Optimize text for TTS
+                    </label>
+                    <div class="info-text">Replace uncommon characters, simplify lists, etc.</div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="addSSMLMarkup" style="width: auto; display: inline;">
+                        Add SSML markup
+                    </label>
+                    <div class="info-text">Automatically add SSML tags for natural pronunciation</div>
+                </div>
+            </div>
+        </div>
+
         <button type="submit" id="generateBtn">Generate Speech & Subtitles</button>
     </form>
 
@@ -152,6 +222,64 @@
         const errorDiv = document.getElementById('error');
         const generateBtn = document.getElementById('generateBtn');
 
+        // Load LLM settings from LocalStorage on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const llmEndpoint = localStorage.getItem('llm_endpoint');
+            const llmApiKey = localStorage.getItem('llm_api_key');
+            const enableLLM = localStorage.getItem('enable_llm') === 'true';
+            const optimizeForTTS = localStorage.getItem('optimize_for_tts') === 'true';
+            const addSSMLMarkup = localStorage.getItem('add_ssml_markup') === 'true';
+
+            if (llmEndpoint) document.getElementById('llmEndpoint').value = llmEndpoint;
+            if (llmApiKey) document.getElementById('llmApiKey').value = llmApiKey;
+            document.getElementById('enableLLM').checked = enableLLM;
+            document.getElementById('optimizeForTTS').checked = optimizeForTTS;
+            document.getElementById('addSSMLMarkup').checked = addSSMLMarkup;
+
+            if (enableLLM) {
+                document.getElementById('llmContent').classList.add('active');
+            }
+        });
+
+        // Toggle LLM settings visibility
+        function toggleLLMSettings() {
+            const checkbox = document.getElementById('enableLLM');
+            const content = document.getElementById('llmContent');
+            content.classList.toggle('active');
+            if (!content.classList.contains('active')) {
+                checkbox.checked = false;
+            } else {
+                checkbox.checked = true;
+            }
+        }
+
+        // Save LLM settings to LocalStorage when values change
+        document.getElementById('llmEndpoint').addEventListener('change', (e) => {
+            localStorage.setItem('llm_endpoint', e.target.value);
+        });
+
+        document.getElementById('llmApiKey').addEventListener('change', (e) => {
+            localStorage.setItem('llm_api_key', e.target.value);
+        });
+
+        document.getElementById('enableLLM').addEventListener('change', (e) => {
+            localStorage.setItem('enable_llm', e.target.checked);
+            const content = document.getElementById('llmContent');
+            if (e.target.checked) {
+                content.classList.add('active');
+            } else {
+                content.classList.remove('active');
+            }
+        });
+
+        document.getElementById('optimizeForTTS').addEventListener('change', (e) => {
+            localStorage.setItem('optimize_for_tts', e.target.checked);
+        });
+
+        document.getElementById('addSSMLMarkup').addEventListener('change', (e) => {
+            localStorage.setItem('add_ssml_markup', e.target.checked);
+        });
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -169,17 +297,42 @@
             const voice = document.getElementById('voice').value;
             const format = document.getElementById('format').value;
 
+            // Build request body
+            const requestBody = {
+                input: text,
+                voice: voice,
+                subtitle_format: format
+            };
+
+            // Add LLM preprocessing if enabled
+            const enableLLM = document.getElementById('enableLLM').checked;
+            if (enableLLM) {
+                const llmEndpoint = document.getElementById('llmEndpoint').value;
+                const llmApiKey = document.getElementById('llmApiKey').value;
+                const optimizeForTTS = document.getElementById('optimizeForTTS').checked;
+                const addSSMLMarkup = document.getElementById('addSSMLMarkup').checked;
+
+                if (!llmEndpoint || !llmApiKey) {
+                    errorDiv.textContent = 'Error: LLM endpoint and API key are required when LLM preprocessing is enabled';
+                    errorDiv.style.display = 'block';
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'Generate Speech & Subtitles';
+                    return;
+                }
+
+                requestBody.llm_api_key = llmApiKey;
+                requestBody.llm_endpoint = llmEndpoint;
+                requestBody.optimize_for_tts = optimizeForTTS;
+                requestBody.add_ssml_markup = addSSMLMarkup;
+            }
+
             try {
                 const response = await fetch('/v1/audio/speech_subtitles', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        input: text,
-                        voice: voice,
-                        subtitle_format: format
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
