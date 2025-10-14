@@ -3,7 +3,7 @@ export const openApiSpec = {
   info: {
     title: 'Edge TTS Subtitles API',
     version: '0.1.0',
-    description: 'Text-to-Speech endpoints with subtitle generation, prosody controls, and optional LLM preprocessing',
+    description: 'Text-to-Speech endpoints with subtitle generation and prosody controls. LLM preprocessing is available client-side in the demo UI.',
   },
   paths: {
     '/v1/audio/speech': {
@@ -22,10 +22,6 @@ export const openApiSpec = {
                   pitch: { type: 'string', description: 'Speech pitch (e.g., "+2st", "low", "high")' },
                   volume: { type: 'string', description: 'Speech volume (e.g., "medium", "loud")' },
                   raw_ssml: { type: 'string', description: 'Raw SSML markup (overrides other parameters)' },
-                  llm_api_key: { type: 'string', description: 'API key for OpenAI-compatible LLM endpoint' },
-                  llm_endpoint: { type: 'string', description: 'OpenAI-compatible LLM endpoint URL' },
-                  optimize_for_tts: { type: 'boolean', description: 'Enable LLM text optimization for TTS' },
-                  add_ssml_markup: { type: 'boolean', description: 'Enable LLM SSML markup generation' },
                 },
                 required: ['input', 'voice'],
               },
@@ -35,7 +31,7 @@ export const openApiSpec = {
         responses: {
           '200': { description: 'audio/mpeg binary' },
           '400': { description: 'Bad Request' },
-          '500': { description: 'Internal Server Error (e.g., LLM preprocessing failed)' },
+          '500': { description: 'Internal Server Error' },
         },
       },
     },
@@ -56,10 +52,6 @@ export const openApiSpec = {
                   pitch: { type: 'string', description: 'Speech pitch (e.g., "+2st", "low", "high")' },
                   volume: { type: 'string', description: 'Speech volume (e.g., "medium", "loud")' },
                   raw_ssml: { type: 'string', description: 'Raw SSML markup (overrides other parameters)' },
-                  llm_api_key: { type: 'string', description: 'API key for OpenAI-compatible LLM endpoint' },
-                  llm_endpoint: { type: 'string', description: 'OpenAI-compatible LLM endpoint URL' },
-                  optimize_for_tts: { type: 'boolean', description: 'Enable LLM text optimization for TTS' },
-                  add_ssml_markup: { type: 'boolean', description: 'Enable LLM SSML markup generation' },
                 },
                 required: ['input', 'voice'],
               },
@@ -72,7 +64,7 @@ export const openApiSpec = {
             content: { 'application/json': { schema: { type: 'object' } } },
           },
           '400': { description: 'Bad Request' },
-          '500': { description: 'Internal Server Error (e.g., LLM preprocessing failed)' },
+          '500': { description: 'Internal Server Error' },
         },
       },
     },

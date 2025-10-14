@@ -1,238 +1,136 @@
 # LLM Preprocessing Examples
 
-This document provides examples of using the LLM preprocessing features with the Edge TTS API.
+This document provides examples of using the client-side LLM preprocessing features in the Edge TTS demo UI.
 
 ## Overview
 
-The API now supports two optional LLM preprocessing modes:
+The demo UI supports two optional LLM preprocessing modes that run **client-side in your browser**:
 
 1. **Text Optimization for TTS** (`optimize_for_tts`): Cleans and optimizes input text for better TTS output
 2. **SSML Markup Generation** (`add_ssml_markup`): Automatically adds SSML tags for natural pronunciation
 
-Both features require an OpenAI-compatible LLM endpoint and API key.
+Both features require an OpenAI-compatible LLM endpoint and API key. **All LLM processing happens in your browser** - your API key never leaves your browser and is never sent to the worker.
 
 ## Configuration
 
-You need to provide:
+In the demo UI, you need to provide:
 
-- `llm_api_key`: Your API key for the LLM service
-- `llm_endpoint`: The OpenAI-compatible endpoint URL (e.g., `https://api.openai.com/v1/chat/completions`)
+- **LLM Endpoint URL**: The OpenAI-compatible endpoint URL (e.g., `https://api.openai.com/v1/chat/completions`)
+- **LLM API Key**: Your API key for the LLM service (stored in LocalStorage)
+
+These settings are saved in your browser's LocalStorage for convenience.
+
+## How It Works
+
+When you enable LLM preprocessing in the demo:
+
+1. **Client-side Processing**: Your browser calls the LLM API directly to process the text
+2. **Text Optimization** (if enabled): The LLM optimizes the text for TTS
+3. **SSML Generation** (if enabled): The LLM adds SSML markup for natural pronunciation
+4. **TTS Generation**: The processed text/SSML is sent to the worker's TTS API using the `raw_ssml` parameter
+
+This approach ensures:
+- ✅ Your API key never leaves your browser
+- ✅ The worker never handles your LLM credentials
+- ✅ Reduced worker execution time
+- ✅ Maximum security and privacy
+
+## Using the Demo UI
+
+1. Navigate to the demo at `/` (e.g., `http://localhost:8787/` or your deployed worker URL)
+2. Check "🤖 Enable LLM Preprocessing"
+3. Enter your LLM endpoint URL and API key
+4. Select preprocessing options:
+   - ✅ Optimize text for TTS
+   - ✅ Add SSML markup
+5. Enter your text and click "Generate Speech & Subtitles"
 
 ## Example 1: Text Optimization
 
-Optimize text by replacing uncommon characters, simplifying lists, and expanding abbreviations.
+**Input:** `"Hello! This is a test w/ some abbrev. & special chars #1"`
 
-```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "Hello! This is a test w/ some abbrev. & special chars #1",
-    "voice": "en-US-EmmaMultilingualNeural",
-    "llm_api_key": "sk-your-api-key",
-    "llm_endpoint": "https://api.openai.com/v1/chat/completions",
-    "optimize_for_tts": true
-  }'
-```
+**After Optimization:** `"Hello! This is a test with some abbreviations and special characters number one"`
 
-**Before:** `"Hello! This is a test w/ some abbrev. & special chars #1"`
-
-**After (example):** `"Hello! This is a test with some abbreviations and special characters number one"`
+The optimization:
+- Replaces `w/` with `with`
+- Expands `abbrev.` to `abbreviations`
+- Replaces `&` with `and`
+- Replaces `#1` with `number one`
 
 ## Example 2: SSML Markup Generation
 
-Automatically add SSML tags for natural pauses, emphasis, and proper pronunciation.
+**Input:** `"Hello, world! This is very important. The meeting is on January 15th at 3pm."`
 
-```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "Hello, world! This is very important. The meeting is on January 15th at 3pm.",
-    "voice": "en-US-EmmaMultilingualNeural",
-    "llm_api_key": "sk-your-api-key",
-    "llm_endpoint": "https://api.openai.com/v1/chat/completions",
-    "add_ssml_markup": true
-  }'
-```
-
-**Before:** `"Hello, world! This is very important. The meeting is on January 15th at 3pm."`
-
-**After (example):**
-
+**After SSML Markup:**
 ```xml
 <speak>
-  Hello, world!
-  <break strength="medium"/>
-  This is <emphasis level="strong">very important</emphasis>.
-  <break strength="medium"/>
+  Hello, world!<break time="500ms"/> 
+  This is <emphasis level="strong">very important</emphasis>.<break time="500ms"/> 
   The meeting is on <say-as interpret-as="date" format="md">January 15th</say-as> 
-  at <say-as interpret-as="time" format="hm">3pm</say-as>.
+  at <say-as interpret-as="time">3pm</say-as>.
 </speak>
 ```
+
+The SSML markup adds:
+- Natural pauses after sentences
+- Emphasis on "very important"
+- Proper pronunciation of dates and times
 
 ## Example 3: Combined Processing
 
 Use both optimization and SSML markup together for the best results.
 
-```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "TODO: Call John @ 555-1234 re: Q1 results (ASAP!)",
-    "voice": "en-US-EmmaMultilingualNeural",
-    "llm_api_key": "sk-your-api-key",
-    "llm_endpoint": "https://api.openai.com/v1/chat/completions",
-    "optimize_for_tts": true,
-    "add_ssml_markup": true
-  }'
-```
+**Input:** `"TODO: Call John @ 555-1234 re: Q1 results (ASAP!)"`
 
 **Processing flow:**
 
-1. First, text is optimized: `"TODO: Call John @ 555-1234 re: Q1 results (ASAP!)"` → `"To do: Call John at five five five one two three four regarding quarter one results as soon as possible"`
+1. First, text is optimized: `"To do: Call John at five five five one two three four regarding quarter one results as soon as possible"`
 2. Then, SSML markup is added with appropriate emphasis and breaks
 
-## Example 4: Using with Raw Audio Endpoint
-
-The LLM preprocessing also works with the `/v1/audio/speech` endpoint:
-
-```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "Check the README.md file ASAP!",
-    "voice": "en-US-EmmaMultilingualNeural",
-    "llm_api_key": "sk-your-api-key",
-    "llm_endpoint": "https://api.openai.com/v1/chat/completions",
-    "optimize_for_tts": true,
-    "add_ssml_markup": true
-  }' --output speech.mp3
+**Final SSML Output:**
+```xml
+<speak>
+  To do: Call John at <say-as interpret-as="telephone">five five five one two three four</say-as>
+  <break time="300ms"/>
+  regarding quarter one results
+  <break time="200ms"/>
+  <emphasis level="strong">as soon as possible</emphasis>.
+</speak>
 ```
-
-## Using the Demo UI
-
-The demo interface at `/` includes a toggleable LLM preprocessing section:
-
-1. Check "🤖 Enable LLM Preprocessing"
-2. Enter your LLM endpoint URL
-3. Enter your API key
-4. Select the desired preprocessing options:
-   - ✅ Optimize text for TTS
-   - ✅ Add SSML markup
-5. Click "Generate Speech & Subtitles"
-
-Your settings are automatically saved to LocalStorage for convenience.
-
-## Error Handling
-
-If LLM preprocessing fails, the API will return a 500 error with details:
-
-```json
-{
-  "error": "LLM text optimization failed",
-  "message": "LLM API request failed: 401 Unauthorized"
-}
-```
-
-Common errors:
-
-- Invalid API key
-- Endpoint not reachable
-- Invalid SSML generated by LLM
-- LLM API rate limits exceeded
-
-## System Prompts
-
-### Text Optimization Prompt
-
-The LLM uses a comprehensive system prompt to:
-
-- Replace uncommon characters and symbols with spoken equivalents (@ → "at", & → "and", # → "number")
-- Expand abbreviations context-aware (Dr. → Doctor, re: → regarding, w/ → with)
-- Transform lists and bullet points into natural prose using connectors
-- Handle numbers, dates, and phone numbers appropriately
-- Fix typos and excessive punctuation
-- Preserve proper nouns, brand names, and technical terms
-- Maintain sentence boundaries and logical structure
-
-### SSML Markup Prompt
-
-The LLM uses a detailed system prompt with specific heuristics:
-
-**Break Tags** - Strategic pauses:
-
-- After sentences (500ms), commas (200ms), paragraphs (800ms)
-- Before important information (strong strength)
-
-**Emphasis Tags** - Highlighting key information:
-
-- Strong emphasis for critical words
-- Moderate for important points
-- Reduced for parentheticals
-- Limited to 2-3 per sentence to avoid over-markup
-
-**Say-As Tags** - Accurate pronunciation:
-
-- Dates, times, numbers (cardinal/ordinal)
-- Phone numbers, currency
-- Character-by-character for acronyms
-
-**Prosody Tags** - Speech characteristics:
-
-- Rate adjustments (slow for complex info, fast for asides)
-- Pitch modulation (lower for warnings, higher for excitement)
-- Volume control where appropriate
-
-**Smart Heuristics**:
-
-- Questions get upward pitch
-- Exclamations add emphasis + breaks
-- Punctuation-based break insertion
-- Multi-digit numbers use say-as tags
-- Acronyms (2-4 caps) spelled out
-
-**Self-Closing Tags**:
-
-- Uses proper self-closing format: `<break time="300ms"/>`
-- Prevents validation errors from improperly closed tags
-
-**Validation**:
-
-- Ensures `<speak>` wrapper is present
-- Validates tag balance (accounting for self-closing tags)
-- Prevents malformed SSML from reaching TTS engine
-
-## Best Practices
-
-1. **Use text optimization** when dealing with:
-   - Technical documentation with abbreviations
-   - Lists and bullet points
-   - Text with special characters or symbols
-   - Mixed formatting (markdown, etc.)
-
-2. **Use SSML markup** when you need:
-   - Natural pauses and pacing
-   - Emphasis on specific words
-   - Proper pronunciation of dates, times, numbers
-   - Enhanced expressiveness
-
-3. **Use both together** for the best results with complex text
-
-4. **Keep API keys secure**: Store them in environment variables or LocalStorage, never in code
-
-5. **Handle errors gracefully**: Always check for LLM preprocessing errors and provide fallbacks
 
 ## Alternative LLM Providers
 
-The API works with any OpenAI-compatible endpoint:
+The client-side implementation works with any OpenAI-compatible endpoint:
 
 - **OpenAI**: `https://api.openai.com/v1/chat/completions`
-- **Azure OpenAI**: `https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT/chat/completions?api-version=2024-02-15-preview`
-- **Local models** (via LM Studio, Ollama, etc.): `http://localhost:1234/v1/chat/completions`
-- **Other providers**: Any service that implements the OpenAI chat completions API
+- **Anthropic (via adapter)**: Use an OpenAI-compatible proxy
+- **Local models (Ollama, LM Studio)**: `http://localhost:11434/v1/chat/completions`
+- **Azure OpenAI**: `https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT/chat/completions?api-version=2024-02-15-preview`
 
-## Performance Considerations
+## Best Practices
 
-- LLM preprocessing adds latency (typically 1-3 seconds per request)
-- Consider caching optimized/marked-up text if processing the same content repeatedly
-- Use smaller/faster models if latency is critical
-- The optimization runs sequentially (optimize → add SSML) when both are enabled
+1. **Start with text optimization** if your input contains abbreviations or special characters
+2. **Add SSML markup** for more natural-sounding speech with proper pauses and emphasis
+3. **Use both together** for the best results on complex text
+4. **Test with different voices** - SSML support may vary slightly between voices
+5. **Keep your API key secure** - it's stored only in your browser's LocalStorage
+
+## Troubleshooting
+
+### Error: "LLM endpoint and API key are required"
+
+Make sure you've entered both the endpoint URL and API key in the LLM settings section.
+
+### Error: "LLM API request failed"
+
+- Check that your API key is valid
+- Verify the endpoint URL is correct
+- Ensure you have sufficient credits/quota
+- Check browser console for CORS errors (local LLM endpoints may need CORS configuration)
+
+### Invalid SSML errors
+
+If the LLM generates invalid SSML, the demo will show an error. Try:
+- Simplifying your input text
+- Using only text optimization without SSML markup
+- Adjusting the LLM temperature (requires code modification)

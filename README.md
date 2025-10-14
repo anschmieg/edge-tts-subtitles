@@ -7,7 +7,7 @@ A high-performance Cloudflare Worker that provides free, high-quality Text-to-Sp
 - 🎤 **OpenAI-Compatible Endpoint** - Drop-in replacement for OpenAI's TTS API
 - 📝 **Subtitle Generation** - Automatic word-level timing for SRT and VTT formats
 - **Prosody Controls** - You can optionally set `rate`, `pitch`, and `volume` or provide raw SSML via `raw_ssml`
-- 🤖 **LLM Preprocessing** - Optional text optimization and SSML markup generation via OpenAI-compatible endpoints
+- 🤖 **Client-Side LLM Preprocessing** - Optional text optimization and SSML markup generation in the demo UI (your API key stays in your browser)
 - 🌍 **Multiple Languages** - Support for 100+ voices in various languages
 - ⚡ **Serverless** - Runs on Cloudflare's global edge network
 - 🆓 **Free** - No API key required, leverages Microsoft Edge TTS
