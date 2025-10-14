@@ -30,6 +30,7 @@ When you enable LLM preprocessing in the demo:
 4. **TTS Generation**: The processed text/SSML is sent to the worker's TTS API using the `raw_ssml` parameter
 
 This approach ensures:
+
 - ✅ Your API key never leaves your browser
 - ✅ The worker never handles your LLM credentials
 - ✅ Reduced worker execution time
@@ -52,6 +53,7 @@ This approach ensures:
 **After Optimization:** `"Hello! This is a test with some abbreviations and special characters number one"`
 
 The optimization:
+
 - Replaces `w/` with `with`
 - Expands `abbrev.` to `abbreviations`
 - Replaces `&` with `and`
@@ -62,6 +64,7 @@ The optimization:
 **Input:** `"Hello, world! This is very important. The meeting is on January 15th at 3pm."`
 
 **After SSML Markup:**
+
 ```xml
 <speak>
   Hello, world!<break time="500ms"/> 
@@ -72,6 +75,7 @@ The optimization:
 ```
 
 The SSML markup adds:
+
 - Natural pauses after sentences
 - Emphasis on "very important"
 - Proper pronunciation of dates and times
@@ -88,6 +92,7 @@ Use both optimization and SSML markup together for the best results.
 2. Then, SSML markup is added with appropriate emphasis and breaks
 
 **Final SSML Output:**
+
 ```xml
 <speak>
   To do: Call John at <say-as interpret-as="telephone">five five five one two three four</say-as>
@@ -131,6 +136,7 @@ Make sure you've entered both the endpoint URL and API key in the LLM settings s
 ### Invalid SSML errors
 
 If the LLM generates invalid SSML, the demo will show an error. Try:
+
 - Simplifying your input text
 - Using only text optimization without SSML markup
 - Adjusting the LLM temperature (requires code modification)

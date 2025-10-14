@@ -19,25 +19,29 @@ A production-quality, static-hostable single-page web application for the Edge T
 ### Development
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Start the development server:
+
    ```bash
    npm run dev
    ```
 
-3. Open http://localhost:5173 in your browser
+3. Open <http://localhost:5173> in your browser
 
 ### Production Build
 
 1. Build for production:
+
    ```bash
    npm run build
    ```
 
 2. Preview the production build:
+
    ```bash
    npm run preview
    ```
@@ -66,12 +70,14 @@ Enable mock mode in the UI to test without the worker. This uses canned demo dat
 ### Local Development
 
 1. Start the worker in a separate terminal:
+
    ```bash
    cd ..
    wrangler dev
    ```
 
 2. Start the UI dev server:
+
    ```bash
    npm run dev
    ```
@@ -107,7 +113,7 @@ Enable mock mode in the UI to test without the worker. This uses canned demo dat
 
 #### Optimize-for-TTS
 
-```
+```text
 You are a text optimization assistant for Text-to-Speech (TTS). Convert the user input into a speech-friendly, natural-sounding form while preserving meaning and proper nouns.
 
 Rules:
@@ -121,7 +127,7 @@ Return ONLY the optimized text — no explanation or metadata.
 
 #### Add-SSML-Markup
 
-```
+```text
 You are an SSML author. Given plain text, add minimal, well-formed SSML to make speech sound natural. Output MUST start with <speak> and end with </speak> and contain only valid SSML tags.
 
 Guidelines:
@@ -152,7 +158,7 @@ When calling LLM APIs from the browser, you may encounter CORS issues. Most LLM 
 
 ### Project Structure
 
-```
+```text
 ui/
 ├── src/
 │   ├── components/

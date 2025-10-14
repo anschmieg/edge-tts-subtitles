@@ -22,9 +22,9 @@ Usage in the demo UI:
 4. Click "Generate Speech & Subtitles"
 
 The client-side JavaScript will:
+
 1. Call the LLM API to optimize the text (if enabled)
 2. Call the LLM API to add SSML markup (if enabled)
 3. Send the processed text/SSML to the TTS API using the `raw_ssml` parameter
 
 This approach ensures maximum security and reduces worker execution time.
-

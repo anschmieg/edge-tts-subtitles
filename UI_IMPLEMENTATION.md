@@ -43,18 +43,21 @@ ui/
 ### Key Features Implemented
 
 #### 1. Voice Selection
+
 - 4 example voices with demo playback
 - Dropdown selector
 - "Play Demo" buttons for each voice
 - Uses worker API to generate demo audio
 
 #### 2. Prosody Controls
+
 - Rate control (slow, normal, fast, very fast presets + custom)
 - Pitch control (low, normal, high presets + custom)
 - Volume control (soft, medium, loud presets + custom)
 - Text inputs for fine-tuning
 
 #### 3. Client-Side LLM Preprocessing
+
 - Toggle to enable/disable
 - LLM endpoint input (HTTPS validation)
 - API key input (password field, never sent to worker)
@@ -65,6 +68,7 @@ ui/
 - Proper error handling and validation
 
 #### 4. Audio Player & Subtitle Viewer
+
 - HTML5 audio player
 - Active cue highlighting during playback
 - Auto-scroll to keep active cue visible
@@ -72,22 +76,26 @@ ui/
 - Duration and voice metadata display
 
 #### 5. Download Options
+
 - Download MP3 audio
 - Download SRT/VTT subtitle file
 - Download ZIP with both files
 
 #### 6. Mock Mode
+
 - Offline testing without worker
 - Canned demo data
 - All UI features functional
 
 #### 7. Responsive Design
+
 - Mobile-first approach
 - Two-column layout on desktop
 - Single-column stacked on mobile
 - Tested on 375px mobile and 1920px desktop
 
 #### 8. Accessibility
+
 - ARIA attributes on all interactive elements
 - Keyboard navigation support
 - Focus styles on all controls
@@ -97,6 +105,7 @@ ui/
 ### Security Implementation
 
 ✅ **LLM API Keys Never Sent to Worker**
+
 - All LLM calls made directly from browser
 - API keys stored only in component state
 - HTTPS-only endpoint validation
@@ -106,6 +115,7 @@ ui/
 ### System Prompts (Included Verbatim)
 
 #### Optimize-for-TTS
+
 ```
 You are a text optimization assistant for Text-to-Speech (TTS). Convert the user input into a speech-friendly, natural-sounding form while preserving meaning and proper nouns.
 
@@ -119,6 +129,7 @@ Return ONLY the optimized text — no explanation or metadata.
 ```
 
 #### Add-SSML-Markup
+
 ```
 You are an SSML author. Given plain text, add minimal, well-formed SSML to make speech sound natural. Output MUST start with <speak> and end with </speak> and contain only valid SSML tags.
 
@@ -133,6 +144,7 @@ Return ONLY the SSML document — no explanation or metadata.
 ### Networking Flow
 
 #### Normal Flow
+
 1. User submits form
 2. Optional: Browser calls LLM API for preprocessing (if enabled)
 3. Browser POSTs to `/v1/audio/speech_subtitles` on worker
@@ -140,6 +152,7 @@ Return ONLY the SSML document — no explanation or metadata.
 5. UI decodes base64 → Blob → Object URL for playback
 
 #### Mock Flow
+
 1. User enables mock mode
 2. UI uses canned payload from constants
 3. All UI features work without worker or LLM
@@ -147,6 +160,7 @@ Return ONLY the SSML document — no explanation or metadata.
 ### Build & Deployment
 
 #### Development
+
 ```bash
 cd ui
 npm install
@@ -154,19 +168,23 @@ npm run dev
 ```
 
 #### Production Build
+
 ```bash
 npm run build
 # Output: dist/ (288KB total, 83.7KB gzipped)
 ```
 
 #### Deploy
+
 Deploy `dist/` folder to:
+
 - Cloudflare Pages
 - Netlify
 - Vercel
 - Any static hosting service
 
 Set environment variable:
+
 ```
 VITE_WORKER_BASE_URL=https://your-worker.workers.dev
 ```
@@ -219,6 +237,7 @@ VITE_WORKER_BASE_URL=https://your-worker.workers.dev
 A complete, production-ready web UI has been successfully implemented with all requested features, security measures, and documentation. The UI is deployable to any static hosting service and provides a beautiful, accessible interface for the Edge TTS Subtitles service.
 
 **Total Implementation:**
+
 - 24 files created
 - 5,061 lines of code added
 - 288KB production build

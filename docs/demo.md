@@ -17,4 +17,3 @@ LocalStorage keys used by the demo:
 - `add_ssml_markup` - Whether to add SSML markup
 
 The LLM preprocessing runs entirely client-side for maximum security and privacy.
-

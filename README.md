@@ -77,13 +77,14 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173 in your browser.
+Then open <http://localhost:5173> in your browser.
 
 For detailed UI documentation, see [`ui/README.md`](ui/README.md).
 
 ### Deploy UI
 
 Build for production:
+
 ```bash
 cd ui
 npm run build
@@ -112,8 +113,8 @@ The demo UI is served from the worker root (GET `/`) and the single source-of-tr
 
 1. Start the worker: `wrangler dev` (in the root directory)
 2. In a separate terminal, start the UI: `cd ui && npm run dev`
-3. Open http://localhost:5173 in your browser
-4. The UI will connect to the worker at http://localhost:8787
+3. Open <http://localhost:5173> in your browser
+4. The UI will connect to the worker at <http://localhost:8787>
 
 Enable "Mock mode" in the UI to test without the worker.
 

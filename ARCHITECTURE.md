@@ -91,6 +91,7 @@ The demo UI at `/` includes optional client-side LLM preprocessing:
 ```
 
 **Benefits:**
+
 - 🔒 API keys never leave the browser
 - ⚡ Reduced worker execution time
 - 💰 Lower worker costs
