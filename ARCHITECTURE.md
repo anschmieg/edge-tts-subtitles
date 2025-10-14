@@ -18,7 +18,7 @@
 │  │  ┌──────────────────────────────────────────────────────┐  │  │
 │  │  │  /v1/audio/speech (OpenAI-compatible)                │  │  │
 │  │  │  ─────────────────────────────────────               │  │  │
-│  │  │  • Accepts: { input, voice }                         │  │  │
+│  │  │  • Accepts: { input, voice, rate, pitch, volume }    │  │  │
 │  │  │  • Returns: Raw MP3 audio                            │  │  │
 │  │  │  • Content-Type: audio/mpeg                          │  │  │
 │  │  └──────────────────────────────────────────────────────┘  │  │
@@ -57,6 +57,45 @@
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## Client-Side LLM Preprocessing (Demo UI Only)
+
+The demo UI at `/` includes optional client-side LLM preprocessing:
+
+```diagram
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Browser (Demo UI)                           │
+│                                                                     │
+│  User Input Text                                                    │
+│       │                                                             │
+│       ├─ (Optional) LLM Preprocessing ──────┐                       │
+│       │                                     │                       │
+│       │                              ┌──────▼──────┐                │
+│       │                              │   LLM API   │                │
+│       │                              │ (Client-    │                │
+│       │                              │  side call) │                │
+│       │                              └──────┬──────┘                │
+│       │                                     │                       │
+│       │  ┌──────────────────────────────────┘                       │
+│       │  │                                                          │
+│       ├──┴─ Optimized Text / SSML                                   │
+│       │                                                             │
+│       ▼                                                             │
+│  POST /v1/audio/speech_subtitles                                    │
+│  { input: text, voice: ..., raw_ssml: ... }                         │
+│                                                                     │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │
+                              ▼
+                    Cloudflare Worker
+                    (TTS Generation Only)
+```
+
+**Benefits:**
+- 🔒 API keys never leave the browser
+- ⚡ Reduced worker execution time
+- 💰 Lower worker costs
+- 🛡️ Maximum security and privacy
+
 ## Request Flow
 
 ### Endpoint 1: `/v1/audio/speech`
@@ -91,6 +130,16 @@ The worker supports optional prosody controls that let callers adjust speech rat
 - `raw_ssml` — when provided the worker will use this SSML string directly and skip prosody wrapping
 
 When prosody fields are provided (and `raw_ssml` is not), the worker wraps the plain text into SSML using a `<prosody>` tag and passes that SSML to the TTS engine. `raw_ssml` takes precedence and is useful for advanced control.
+
+## LLM Preprocessing (Client-Side Only)
+
+The demo UI includes optional client-side LLM preprocessing. When enabled:
+
+1. **Browser** calls LLM API to optimize text and/or generate SSML
+2. **Browser** sends processed text/SSML to worker via `raw_ssml` parameter
+3. **Worker** generates TTS audio (no LLM processing server-side)
+
+This approach ensures API keys never leave the browser and reduces worker execution time.
 
 ## Demo UI
 
