@@ -57,6 +57,40 @@ See the `docs/` folder for focused documentation. Start at `docs/index.md`.
 
 Interactive API docs (Swagger UI) are available at `/docs` when the worker is running. The OpenAPI spec is available at `/openapi.json`.
 
+## Web UI
+
+A production-quality, static-hostable single-page web application is available in the `ui/` directory. The UI provides:
+
+- 🎨 Beautiful, responsive design (React + Tailwind CSS)
+- 🎤 Voice selection with demo playback
+- 🎛️ Prosody controls (rate, pitch, volume)
+- 🤖 Optional client-side LLM preprocessing
+- 📝 Subtitle viewer with active cue highlighting
+- 💾 Download options (MP3, SRT/VTT, ZIP)
+- 🧪 Mock mode for offline testing
+
+### Quick Start (UI)
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+Then open http://localhost:5173 in your browser.
+
+For detailed UI documentation, see [`ui/README.md`](ui/README.md).
+
+### Deploy UI
+
+Build for production:
+```bash
+cd ui
+npm run build
+```
+
+Deploy the `ui/dist/` folder to any static hosting service (Cloudflare Pages, Netlify, Vercel, etc.).
+
 ## Get started
 
 1. Sign up for [Cloudflare Workers](https://workers.dev). The free tier is sufficient for most use cases.
@@ -66,11 +100,22 @@ Interactive API docs (Swagger UI) are available at `/docs` when the worker is ru
 
 ## Development
 
+### Worker Development
+
 1. Run `wrangler dev` to start a local instance of the API.
 2. Test the endpoints using curl or your favorite HTTP client.
 3. Changes made in the `src/` folder will automatically trigger the server to reload.
 
 The demo UI is served from the worker root (GET `/`) and the single source-of-truth page lives in `src/demo.ts`.
+
+### UI Development
+
+1. Start the worker: `wrangler dev` (in the root directory)
+2. In a separate terminal, start the UI: `cd ui && npm run dev`
+3. Open http://localhost:5173 in your browser
+4. The UI will connect to the worker at http://localhost:8787
+
+Enable "Mock mode" in the UI to test without the worker.
 
 ## Technical Details
 
