@@ -30,32 +30,17 @@ You can also control prosody and provide raw SSML. Supported optional fields:
 }
 ```
 
-**LLM Preprocessing (Optional):**
+## LLM Preprocessing (Client-side)
 
-You can optionally enable LLM preprocessing to optimize text for TTS or add SSML markup automatically:
+LLM preprocessing is performed in the browser (client-side) to avoid server-side proxy risks. The worker accepts only processed text or `raw_ssml`.
 
-```json
-{
-  "llm_api_key": "sk-...",              // API key for OpenAI-compatible endpoint
-  "llm_endpoint": "https://api.openai.com/v1/chat/completions", // OpenAI-compatible endpoint
-  "optimize_for_tts": true,              // Enable text optimization for TTS
-  "add_ssml_markup": true                // Enable automatic SSML markup generation
-}
-```
+Client flow:
 
-When `optimize_for_tts` is enabled, the LLM will:
+1. Browser calls the user-configured LLM endpoint (OpenAI-compatible) with a system prompt (see `docs/llm-preprocessing.md` for optimized prompts).
+2. Browser validates the response (SSML must start with `<speak>` and be balanced if using SSML mode).
+3. Browser POSTs the processed text as `input`, or SSML as `raw_ssml`, to `/v1/audio/speech` or `/v1/audio/speech_subtitles`.
 
-- Replace uncommon characters with spoken equivalents
-- Simplify lists and bullet points to natural prose
-- Expand abbreviations and acronyms
-- Fix typos and formatting issues
-
-When `add_ssml_markup` is enabled, the LLM will:
-
-- Add break tags for natural pauses
-- Add emphasis tags for important words
-- Add prosody adjustments for specific phrases
-- Add say-as tags for dates, times, and numbers
+If the LLM endpoint does not support browser CORS, use the demo's mock mode for UI testing or provide a private admin proxy.
 
 For a browsable API specification and interactive UI, open `/docs` on your worker (for local dev: `http://localhost:8787/docs`). The OpenAPI JSON is available at `/openapi.json`.
 

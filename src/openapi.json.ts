@@ -22,10 +22,7 @@ export const openApiSpec = {
                   pitch: { type: 'string', description: 'Speech pitch (e.g., "+2st", "low", "high")' },
                   volume: { type: 'string', description: 'Speech volume (e.g., "medium", "loud")' },
                   raw_ssml: { type: 'string', description: 'Raw SSML markup (overrides other parameters)' },
-                  llm_api_key: { type: 'string', description: 'API key for OpenAI-compatible LLM endpoint' },
-                  llm_endpoint: { type: 'string', description: 'OpenAI-compatible LLM endpoint URL' },
-                  optimize_for_tts: { type: 'boolean', description: 'Enable LLM text optimization for TTS' },
-                  add_ssml_markup: { type: 'boolean', description: 'Enable LLM SSML markup generation' },
+                  // LLM preprocessing should be performed client-side; worker accepts processed text or raw_ssml.
                 },
                 required: ['input', 'voice'],
               },
@@ -56,10 +53,7 @@ export const openApiSpec = {
                   pitch: { type: 'string', description: 'Speech pitch (e.g., "+2st", "low", "high")' },
                   volume: { type: 'string', description: 'Speech volume (e.g., "medium", "loud")' },
                   raw_ssml: { type: 'string', description: 'Raw SSML markup (overrides other parameters)' },
-                  llm_api_key: { type: 'string', description: 'API key for OpenAI-compatible LLM endpoint' },
-                  llm_endpoint: { type: 'string', description: 'OpenAI-compatible LLM endpoint URL' },
-                  optimize_for_tts: { type: 'boolean', description: 'Enable LLM text optimization for TTS' },
-                  add_ssml_markup: { type: 'boolean', description: 'Enable LLM SSML markup generation' },
+                  // LLM preprocessing should be performed client-side; worker accepts processed text or raw_ssml.
                 },
                 required: ['input', 'voice'],
               },
