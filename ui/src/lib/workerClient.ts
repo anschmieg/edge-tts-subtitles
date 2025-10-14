@@ -1,4 +1,4 @@
-import { WORKER_BASE_URL, MOCK_PAYLOAD } from '../constants';
+import { MOCK_PAYLOAD, resolveWorkerBaseUrl } from '../constants';
 
 export interface TTSRequest {
   input: string;
@@ -52,7 +52,9 @@ export async function generateSpeechWithSubtitles(
     });
   }
 
-  const response = await fetch(`${WORKER_BASE_URL}/v1/audio/speech_subtitles`, {
+  const baseUrl = await resolveWorkerBaseUrl();
+
+  const response = await fetch(`${baseUrl}/v1/audio/speech_subtitles`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

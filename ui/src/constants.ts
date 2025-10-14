@@ -1,5 +1,63 @@
-// Worker base URL - can be configured via environment variable
-export const WORKER_BASE_URL = import.meta.env.VITE_WORKER_BASE_URL || 'http://localhost:8787';
+// Worker endpoints: prefer a local Wrangler dev server when it's reachable.
+const HOSTED_WORKER_FALLBACK =
+  import.meta.env.VITE_WORKER_BASE_URL || 'http://edge-tts-subtitles.s-x.workers.dev';
+
+const LOCAL_WRANGLER_URLS = ['http://127.0.0.1:8787', 'http://localhost:8787'];
+
+let cachedWorkerBaseUrl: string | null = null;
+let resolvingWorkerBaseUrl: Promise<string> | null = null;
+
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+async function isReachable(url: string): Promise<boolean> {
+  if (typeof fetch !== 'function') {
+    return false;
+  }
+
+  try {
+    await fetch(stripTrailingSlash(url) + '/', { method: 'GET', mode: 'no-cors' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveWorkerBaseUrl(): Promise<string> {
+  if (cachedWorkerBaseUrl) {
+    return cachedWorkerBaseUrl;
+  }
+
+  if (!resolvingWorkerBaseUrl) {
+    resolvingWorkerBaseUrl = (async () => {
+      for (const candidate of LOCAL_WRANGLER_URLS) {
+        if (stripTrailingSlash(candidate) === stripTrailingSlash(HOSTED_WORKER_FALLBACK)) {
+          return stripTrailingSlash(candidate);
+        }
+        const reachable = await isReachable(candidate);
+        if (reachable) {
+          return stripTrailingSlash(candidate);
+        }
+      }
+      return stripTrailingSlash(HOSTED_WORKER_FALLBACK);
+    })()
+      .catch(() => stripTrailingSlash(HOSTED_WORKER_FALLBACK))
+      .then((url) => {
+        cachedWorkerBaseUrl = url;
+        return url;
+      })
+      .finally(() => {
+        resolvingWorkerBaseUrl = null;
+      });
+  }
+
+  return resolvingWorkerBaseUrl;
+}
+
+// Legacy export preserved for callers that only care about the hosted endpoint.
+export const WORKER_BASE_URL = stripTrailingSlash(HOSTED_WORKER_FALLBACK);
+export const LOCAL_WORKER_BASE_URLS = [...LOCAL_WRANGLER_URLS];
 
 // Example voices with demo samples
 export const EXAMPLE_VOICES = [
