@@ -16,8 +16,8 @@ export function parseSRT(content: string): SubtitleCue[] {
   
   return parsed.map((cue: any) => ({
     id: cue.id,
-    startTime: parseFloat(cue.startTime),
-    endTime: parseFloat(cue.endTime),
+    startTime: srtTimeToMs(cue.startTime),
+    endTime: srtTimeToMs(cue.endTime),
     text: cue.text,
   }));
 }
@@ -53,6 +53,13 @@ export function parseVTT(content: string): SubtitleCue[] {
   }
   
   return cues;
+}
+
+/**
+ * Convert SRT timestamp (HH:MM:SS,mmm) to milliseconds
+ */
+function srtTimeToMs(timeString: string): number {
+  return vttTimeToMs(timeString.replace(',', '.'));
 }
 
 /**
