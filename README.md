@@ -20,7 +20,7 @@ A high-performance Cloudflare Worker that provides free, high-quality Text-to-Sp
 Returns raw MP3 audio data.
 
 ```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech \
+curl -X POST http://edge-tts-subtitles.s-x.workers.dev/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"input": "Hello, world!", "voice": "en-US-EmmaMultilingualNeural", "rate": "1.0", "pitch": "+2st"}' \
   --output output.mp3
@@ -31,7 +31,7 @@ curl -X POST https://your-worker.workers.dev/v1/audio/speech \
 Returns JSON with base64-encoded audio and synchronized subtitles.
 
 ```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
+curl -X POST http://edge-tts-subtitles.s-x.workers.dev/v1/audio/speech_subtitles \
   -H "Content-Type: application/json" \
   -d '{
     "input": "Hello, world!",

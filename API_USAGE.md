@@ -46,7 +46,7 @@ Normalization rules:
 **Example using curl:**
 
 ```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech \
+curl -X POST http://edge-tts-subtitles.s-x.workers.dev/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"input": "Hello, world!", "voice": "en-US-EmmaMultilingualNeural"}' \
   --output output.mp3
@@ -87,7 +87,7 @@ Returns JSON with base64-encoded audio and synchronized subtitles.
 **Example using curl:**
 
 ```bash
-curl -X POST https://your-worker.workers.dev/v1/audio/speech_subtitles \
+curl -X POST http://edge-tts-subtitles.s-x.workers.dev/v1/audio/speech_subtitles \
   -H "Content-Type: application/json" \
   -d '{
     "input": "Hello, world! This is a test.",

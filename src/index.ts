@@ -3,6 +3,7 @@ import type { TTSRequest } from './types';
 import { demoHtml } from './demo';
 import { openApiSpec } from './openapi.json';
 import { swaggerHtml } from './swagger-ui';
+import { validateRawSsml, stripSsmlTags, ssmlToPlainText } from './lib/ssmlServer';
 
 /**
  * Helper function to convert ArrayBuffer to Base64
@@ -16,52 +17,155 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	return btoa(binary);
 }
 
-function escapeXml(str: string): string {
-	return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(Math.max(value, min), max);
 }
 
-// Normalize and validate prosody inputs
-function normalizeRate(rate?: string): string | undefined {
+function formatPercentDelta(delta: number): string | undefined {
+	const rounded = Math.round(delta);
+	if (!Number.isFinite(rounded) || rounded === 0) {
+		return undefined;
+	}
+	const clamped = clamp(rounded, -100, 100);
+	return `${clamped > 0 ? '+' : ''}${clamped}%`;
+}
+
+function formatHzDelta(delta: number): string | undefined {
+	const rounded = Math.round(delta);
+	if (!Number.isFinite(rounded) || rounded === 0) {
+		return undefined;
+	}
+	const clamped = clamp(rounded, -1200, 1200);
+	return `${clamped > 0 ? '+' : ''}${clamped}Hz`;
+}
+
+function mapRate(rate?: string): string | undefined {
 	if (!rate) return undefined;
-	const s = rate.trim().toLowerCase();
-	// Allow keywords
-	const keywords = new Set(['x-slow','slow','medium','fast','x-fast','default']);
-	if (keywords.has(s)) return s;
-	// If ends with % or contains letters, pass through
-	if (/%$/.test(s) || /[a-z]/.test(s)) return s;
-	// Numeric form like '1.2' -> '120%'
-	const n = Number(s);
-	if (!Number.isFinite(n)) return undefined;
-	// Normalize: 1.0 -> 100%
-	return Math.round(n * 100) + '%';
+	const raw = rate.trim();
+	if (!raw) return undefined;
+	const value = raw.toLowerCase();
+	const neutral = new Set(['1', '1.0', '1.00', '1x', 'normal', 'default', 'medium', '100%']);
+	if (neutral.has(value)) return undefined;
+
+	const keywordMap: Record<string, number> = {
+		'x-slow': -60,
+		'slow': -20,
+		'medium': 0,
+		'normal': 0,
+		'fast': 20,
+		'very fast': 40,
+		'x-fast': 60,
+		'default': 0,
+	};
+	if (keywordMap[value] !== undefined) {
+		return formatPercentDelta(keywordMap[value]);
+	}
+
+	const percentMatch = value.match(/^([+-]?\d+(?:\.\d+)?)%$/);
+	if (percentMatch) {
+		const num = Number(percentMatch[1]);
+		if (!Number.isFinite(num)) return undefined;
+		if (value.startsWith('+') || value.startsWith('-')) {
+			return formatPercentDelta(num);
+		}
+		return formatPercentDelta(num - 100);
+	}
+
+	const factorMatch = value.match(/^([+-]?\d+(?:\.\d+)?)x$/);
+	if (factorMatch) {
+		const factor = Number(factorMatch[1]);
+		if (!Number.isFinite(factor)) return undefined;
+		return formatPercentDelta((factor - 1) * 100);
+	}
+
+	const numeric = Number(value);
+	if (Number.isFinite(numeric)) {
+		return formatPercentDelta((numeric - 1) * 100);
+	}
+
+	return undefined;
 }
 
-function normalizePitch(pitch?: string): string | undefined {
+function mapPitch(pitch?: string): string | undefined {
 	if (!pitch) return undefined;
-	const s = pitch.trim();
-	// accept 'low', 'medium', 'high', numeric semitone offsets like '+2st' or '-1st'
-	const keywords = new Set(['x-low','low','medium','high','x-high','default']);
-	if (keywords.has(s.toLowerCase())) return s.toLowerCase();
-	if (/^[+-]?\d+(\.\d+)?st$/.test(s)) return s; // semitone format
-	// pass through if contains letters
-	if (/[a-zA-Z]/.test(s)) return s;
-	// numeric like '2' -> '+2st'
-	const n = Number(s);
-	if (!Number.isFinite(n)) return undefined;
-	return (n >= 0 ? '+' : '') + n + 'st';
+	const raw = pitch.trim();
+	if (!raw) return undefined;
+	const value = raw.toLowerCase();
+	const neutral = new Set(['0', '+0', '-0', '0st', '+0st', '-0st', '0hz', '+0hz', '-0hz', 'default', 'medium', 'normal']);
+	if (neutral.has(value)) return undefined;
+
+	const keywordMap: Record<string, number> = {
+		'x-low': -600,
+		'low': -300,
+		'medium': 0,
+		'high': 300,
+		'x-high': 600,
+	};
+	if (keywordMap[value] !== undefined) {
+		return formatHzDelta(keywordMap[value]);
+	}
+
+	const semitoneMatch = value.match(/^([+-]?\d+(?:\.\d+)?)st$/);
+	if (semitoneMatch) {
+		const semitones = Number(semitoneMatch[1]);
+		if (!Number.isFinite(semitones)) return undefined;
+		// Rough conversion: 1 semitone ≈ 100 Hz adjustment
+		return formatHzDelta(semitones * 100);
+	}
+
+	const hzMatch = value.match(/^([+-]?\d+(?:\.\d+)?)hz$/);
+	if (hzMatch) {
+		const hz = Number(hzMatch[1]);
+		if (!Number.isFinite(hz)) return undefined;
+		return formatHzDelta(hz);
+	}
+
+	return undefined;
 }
 
-function normalizeVolume(volume?: string): string | undefined {
+function mapVolume(volume?: string): string | undefined {
 	if (!volume) return undefined;
-	const s = volume.trim().toLowerCase();
-	const keywords = new Set(['silent','x-soft','soft','medium','loud','x-loud','default']);
-	if (keywords.has(s)) return s;
-	// allow db values like '-6dB' or numeric percent
-	if (/^-?\d+(\.\d+)?db$/.test(s)) return s;
-	if (/%$/.test(s)) return s;
-	// numeric 0-1 -> percent
-	const n = Number(s);
-	if (Number.isFinite(n)) return Math.round(n * 100) + '%';
+	const raw = volume.trim();
+	if (!raw) return undefined;
+	const value = raw.toLowerCase();
+	const neutral = new Set(['medium', 'default', 'normal', '0%', '+0%', '-0%', '0']);
+	if (neutral.has(value)) return undefined;
+
+	const keywordMap: Record<string, number> = {
+		'silent': -100,
+		'x-soft': -60,
+		'soft': -20,
+		'medium': 0,
+		'loud': 20,
+		'x-loud': 40,
+	};
+	if (keywordMap[value] !== undefined) {
+		return formatPercentDelta(keywordMap[value]);
+	}
+
+	const percentMatch = value.match(/^([+-]?\d+(?:\.\d+)?)%$/);
+	if (percentMatch) {
+		const num = Number(percentMatch[1]);
+		if (!Number.isFinite(num)) return undefined;
+		if (value.startsWith('+') || value.startsWith('-')) {
+			return formatPercentDelta(num);
+		}
+		return formatPercentDelta(num);
+	}
+
+	const dbMatch = value.match(/^([+-]?\d+(?:\.\d+)?)db$/);
+	if (dbMatch) {
+		const db = Number(dbMatch[1]);
+		if (!Number.isFinite(db)) return undefined;
+		// Approximate conversion: 1 dB ≈ 5% change
+		return formatPercentDelta(db * 5);
+	}
+
+	const numeric = Number(value);
+	if (Number.isFinite(numeric)) {
+		return formatPercentDelta((numeric - 1) * 100);
+	}
+
 	return undefined;
 }
 
@@ -89,6 +193,13 @@ export default {
 
 		try {
 			switch (url.pathname) {
+				case '/__health': {
+					// Lightweight health endpoint for UI reachability probes.
+					if (request.method === 'GET' || request.method === 'HEAD') {
+						return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*' } });
+					}
+					break;
+				}
 				case '/': {
 					if (request.method === 'GET') {
 						return new Response(demoHtml, {
@@ -116,24 +227,52 @@ export default {
 						});
 					}
 
-					// Prepare SSML if prosody parameters are provided
-					let ttsInput = body.input;
-					if (body.raw_ssml) {
-						ttsInput = body.raw_ssml;
-					} else if (body.rate || body.pitch || body.volume) {
-						const r = normalizeRate(body.rate);
-						const p = normalizePitch(body.pitch);
-						const v = normalizeVolume(body.volume);
-						const rateAttr = r ? ` rate=\"${r}\"` : '';
-						const pitchAttr = p ? ` pitch=\"${p}\"` : '';
-						const volumeAttr = v ? ` volume=\"${v}\"` : '';
-						ttsInput = `<speak><prosody${rateAttr}${pitchAttr}${volumeAttr}>${escapeXml(body.input)}</prosody></speak>`;
+					// Accept optional raw_ssml. If provided, use it directly as the
+					// synthesis input. If it doesn't look like a full SSML document,
+					// wrap it in a <speak> element so TTS engines that expect SSML
+					// receive a well-formed document.
+
+					const rateOption = mapRate(body.rate);
+					const pitchOption = mapPitch(body.pitch);
+					const volumeOption = mapVolume(body.volume);
+					const prosodyOptions: { rate?: string; pitch?: string; volume?: string } = {};
+					if (rateOption) prosodyOptions.rate = rateOption;
+					if (pitchOption) prosodyOptions.pitch = pitchOption;
+					if (volumeOption) prosodyOptions.volume = volumeOption;
+
+					// Determine the input to pass to EdgeTTS. Prefer raw_ssml when
+					// supplied by the caller (client-side LLM or advanced UI).
+					const debugEnabled = Boolean(
+						(env && ((env as any).DEBUG_SSML === '1' || (env as any).DEBUG_SSML === 'true')) ||
+						(request.headers.get && request.headers.get('x-debug-ssml') === '1')
+					);
+					if (debugEnabled) {
+						console.log('SSML debug: endpoint=/v1/audio/speech, raw_ssml present=', !!body.raw_ssml);
+					}
+					let synthesisInput = body.input;
+					if (body.raw_ssml && typeof body.raw_ssml === 'string' && body.raw_ssml.trim()) {
+						const validation = validateRawSsml(body.raw_ssml);
+						if (!validation.ok) {
+							return new Response(JSON.stringify({ error: `Invalid SSML: ${validation.error}` }), {
+								status: 400,
+								headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+							});
+						}
+						synthesisInput = validation.wrapped || body.raw_ssml.trim();
 					}
 
-					const tts = new EdgeTTS(ttsInput, body.voice);
+					if (debugEnabled) {
+						// Log a short preview to avoid leaking secrets; this helps verify
+						// whether we're actually sending SSML to the TTS library.
+						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
+					}
+					const tts = new EdgeTTS(synthesisInput, body.voice, prosodyOptions);
 					const result = await tts.synthesize();
 
 					const audioBuffer = await result.audio.arrayBuffer();
+					if (debugEnabled) {
+						console.log('SSML debug: /v1/audio/speech returned audio size bytes=', audioBuffer.byteLength);
+					}
 					return new Response(audioBuffer, {
 						status: 200,
 						headers: {
@@ -162,33 +301,97 @@ export default {
 
 					const subtitleFormat = body.subtitle_format || 'srt';
 
-					// Prepare SSML for subtitles endpoint as well
-					let ttsInput = body.input;
-					if (body.raw_ssml) {
-						ttsInput = body.raw_ssml;
-					} else if (body.rate || body.pitch || body.volume) {
-						const r = normalizeRate(body.rate);
-						const p = normalizePitch(body.pitch);
-						const v = normalizeVolume(body.volume);
-						const rateAttr = r ? ` rate=\"${r}\"` : '';
-						const pitchAttr = p ? ` pitch=\"${p}\"` : '';
-						const volumeAttr = v ? ` volume=\"${v}\"` : '';
-						ttsInput = `<speak><prosody${rateAttr}${pitchAttr}${volumeAttr}>${escapeXml(body.input)}</prosody></speak>`;
+					const rateOption = mapRate(body.rate);
+					const debugEnabled = Boolean(
+						(env && ((env as any).DEBUG_SSML === '1' || (env as any).DEBUG_SSML === 'true')) ||
+						(request.headers.get && request.headers.get('x-debug-ssml') === '1')
+					);
+					if (debugEnabled) {
+						console.log('SSML debug: endpoint=/v1/audio/speech_subtitles, raw_ssml present=', !!body.raw_ssml);
+					}
+					const pitchOption = mapPitch(body.pitch);
+					const volumeOption = mapVolume(body.volume);
+					const prosodyOptions: { rate?: string; pitch?: string; volume?: string } = {};
+					if (rateOption) prosodyOptions.rate = rateOption;
+					if (pitchOption) prosodyOptions.pitch = pitchOption;
+					if (volumeOption) prosodyOptions.volume = volumeOption;
+
+					// Prefer raw_ssml when provided. Validate and wrap non-SSML
+					// fragments in a <speak> element to produce valid SSML.
+					let synthesisInput = body.input;
+					let subtitleContentText: string | undefined;
+					if (body.raw_ssml && typeof body.raw_ssml === 'string' && body.raw_ssml.trim()) {
+						const validation = validateRawSsml(body.raw_ssml.trim());
+						if (!validation.ok) {
+							return new Response(JSON.stringify({ error: `Invalid SSML: ${validation.error}` }), {
+								status: 400,
+								headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+							});
+						}
+						synthesisInput = validation.wrapped || body.raw_ssml.trim();
+						// produce a plain-text subtitle representation from SSML
+						try {
+							subtitleContentText = ssmlToPlainText(synthesisInput);
+						} catch (e) {
+							// non-fatal: leave subtitleContentText undefined if extraction fails
+							subtitleContentText = undefined;
+						}
 					}
 
-					const tts = new EdgeTTS(ttsInput, body.voice);
+					if (debugEnabled) {
+						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
+					}
+					const tts = new EdgeTTS(synthesisInput, body.voice, prosodyOptions);
 					const result = await tts.synthesize();
 
 					const audioBuffer = await result.audio.arrayBuffer();
 					const audioContentBase64 = arrayBufferToBase64(audioBuffer);
 
-					const subtitleContent = subtitleFormat === 'vtt' ? createVTT(result.subtitle) : createSRT(result.subtitle);
+					const subtitleContentRaw = subtitleFormat === 'vtt' ? createVTT(result.subtitle) : createSRT(result.subtitle);
+					let subtitleContent: string;
+					// If we produced a SSML-derived plain-text version (subtitleContentText),
+					// prefer per-cue conversion so `subtitle_content` contains no SSML markup.
+					if (subtitleContentText) {
+						try {
+							const cueSplit = (subtitleContentRaw || '').trim().split(/\r?\n\r?\n/);
+							const timestampRe = /\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}/;
+							const cleanedBlocks = cueSplit.map(block => {
+								const lines = block.split(/\r?\n/).map(l => l.trim());
+								if (lines.length >= 2 && timestampRe.test(lines[1])) {
+									const index = lines[0];
+									const time = lines[1];
+									const text = lines.slice(2).join(' ');
+									// Use ssmlToPlainText for best fidelity; wrap in <speak> if needed.
+									let cleaned = '';
+									try {
+										const candidate = text.trim().startsWith('<') ? text : `<speak>${text}</speak>`;
+										cleaned = ssmlToPlainText(candidate) || '';
+									} catch (e) {
+										cleaned = stripSsmlTags(text);
+									}
+									return [index, time, cleaned].join('\n');
+								}
+								return stripSsmlTags(block);
+							});
+							subtitleContent = cleanedBlocks.join('\n\n').trim();
+						} catch (e) {
+							// On any failure, fall back to the previous conservative cleaner
+							subtitleContent = stripSsmlTags(subtitleContentRaw || '');
+						}
+					} else {
+						subtitleContent = stripSsmlTags(subtitleContentRaw || '');
+					}
+					if (debugEnabled) {
+						console.log('SSML debug: subtitleContent preview:', (subtitleContentRaw || '').slice(0, 300));
+					}
 
 					return new Response(
 						JSON.stringify({
 							audio_content_base64: audioContentBase64,
 							subtitle_format: subtitleFormat,
 							subtitle_content: subtitleContent,
+							subtitle_content_raw: subtitleContentRaw,
+							subtitle_content_text: subtitleContentText,
 						}),
 						{
 							status: 200,
@@ -224,7 +427,7 @@ export default {
 					return new Response(JSON.stringify({ error: 'Not found' }), {
 						status: 404,
 						headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-						});
+					});
 			}
 		} catch (error) {
 			console.error('Error processing request:', error);

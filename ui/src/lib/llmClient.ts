@@ -1,4 +1,5 @@
-import { OPTIMIZE_FOR_TTS_PROMPT, ADD_SSML_MARKUP_PROMPT } from '../constants';
+import { OPTIMIZE_FOR_TTS_PROMPT, ADD_SSML_MARKUP_PROMPT, DIRECT_SSML_PROMPT } from '../constants';
+import { assertValidSsml } from './validateSsml';
 
 export interface LLMConfig {
   endpoint: string;
@@ -67,9 +68,9 @@ export function validateSSML(content: string): { valid: boolean; error?: string 
   const nonSelfClosingOpenCount = openTags.length - selfClosingTags.length;
 
   if (nonSelfClosingOpenCount !== closeTags.length) {
-    return { 
-      valid: false, 
-      error: `Tag mismatch: ${nonSelfClosingOpenCount} opening tags, ${closeTags.length} closing tags` 
+    return {
+      valid: false,
+      error: `Tag mismatch: ${nonSelfClosingOpenCount} opening tags, ${closeTags.length} closing tags`
     };
   }
 
@@ -161,11 +162,11 @@ export async function optimizeTextForTTS(
   text: string
 ): Promise<string> {
   const result = await callLLM(config, OPTIMIZE_FOR_TTS_PROMPT, text);
-  
+
   if (!result.trim()) {
     throw new Error('LLM returned empty response');
   }
-  
+
   return result.trim();
 }
 
@@ -176,12 +177,53 @@ export async function addSSMLMarkup(
   config: LLMConfig,
   text: string
 ): Promise<string> {
-  const result = await callLLM(config, ADD_SSML_MARKUP_PROMPT, text);
-  
-  const validation = validateSSML(result);
-  if (!validation.valid) {
-    throw new Error(`Invalid SSML response: ${validation.error}`);
+  // Up to 2 attempts: initial + one retry with explicit correction instruction.
+  let attempt = 0;
+  let lastError: string | undefined;
+  while (attempt < 2) {
+    attempt += 1;
+    const result = await callLLM(config, ADD_SSML_MARKUP_PROMPT, text);
+    try {
+      // assertValidSsml uses DOMParser when available for robust validation
+      return assertValidSsml(result);
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (attempt >= 2) break;
+      // Provide a short corrective hint to the model for the retry.
+      const hint = `The previous output contained malformed or invalid SSML: ${lastError}. Return only valid SSML that starts with <speak> and ends with </speak>. Do not include any explanation.`;
+      // On retry, ask the model again with the hint and the original text.
+      await callLLM(config, ADD_SSML_MARKUP_PROMPT, `${hint}
+
+${text}`);
+    }
   }
-  
-  return result.trim();
+
+  throw new Error(`Invalid SSML response after retries: ${lastError}`);
+}
+
+/**
+ * Generate direct SSML in a fully-automatic flow. Validates the returned
+ * SSML and retries once with an instruction to fix invalid XML if needed.
+ */
+export async function generateDirectSSML(
+  config: LLMConfig,
+  text: string
+): Promise<string> {
+  // Try up to 2 times: first best-effort, then retry with correction hint.
+  let lastError: string | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const systemPrompt = DIRECT_SSML_PROMPT;
+    const userPayload = attempt === 0 ? text : `The previous output was invalid SSML: ${lastError}. Return only valid SSML that starts with <speak> and ends with </speak>. Do not include any explanation.
+
+${text}`;
+    const result = await callLLM(config, systemPrompt, userPayload);
+    try {
+      return assertValidSsml(result);
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      // continue to next attempt
+    }
+  }
+
+  throw new Error(`LLM produced invalid SSML after retries: ${lastError}`);
 }

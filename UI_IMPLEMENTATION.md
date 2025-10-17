@@ -186,7 +186,7 @@ Deploy `dist/` folder to:
 Set environment variable:
 
 ```
-VITE_WORKER_BASE_URL=https://your-worker.workers.dev
+VITE_WORKER_BASE_URL=http://edge-tts-subtitles.s-x.workers.dev
 ```
 
 ### Testing Results

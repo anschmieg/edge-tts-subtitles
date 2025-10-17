@@ -56,7 +56,7 @@ The worker base URL can be configured via environment variable:
 
 ```bash
 # .env.local
-VITE_WORKER_BASE_URL=https://your-worker.workers.dev
+VITE_WORKER_BASE_URL=http://edge-tts-subtitles.s-x.workers.dev
 ```
 
 Default: `http://localhost:8787` (for local development)

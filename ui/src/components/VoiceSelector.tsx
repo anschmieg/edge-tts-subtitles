@@ -30,7 +30,7 @@ export function VoiceSelector({ selectedVoice, onVoiceChange }: VoiceSelectorPro
 
       const audioUrl = createAudioURL(response.audio_content_base64);
       const audio = new Audio(audioUrl);
-      
+
       audio.onended = () => {
         setPlayingVoice(null);
         URL.revokeObjectURL(audioUrl);
@@ -70,7 +70,7 @@ export function VoiceSelector({ selectedVoice, onVoiceChange }: VoiceSelectorPro
           <button
             key={voice.id}
             type="button"
-            onClick={() => handlePlayDemo(voice.id, voice.demoText)}
+            onClick={() => handlePlayDemo(voice.id, voice.demoText ?? voice.name)}
             disabled={playingVoice === voice.id}
             className="btn-secondary text-sm py-1.5"
           >

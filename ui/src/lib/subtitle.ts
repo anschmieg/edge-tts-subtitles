@@ -1,4 +1,5 @@
 import parser from 'srt-parser-2';
+import { extractTextFromSsml } from './ssml';
 
 export interface SubtitleCue {
   id: string;
@@ -13,12 +14,13 @@ export interface SubtitleCue {
 export function parseSRT(content: string): SubtitleCue[] {
   const srtParser = new parser();
   const parsed = srtParser.fromSrt(content);
-  
+
   return parsed.map((cue: any) => ({
     id: cue.id,
     startTime: srtTimeToMs(cue.startTime),
     endTime: srtTimeToMs(cue.endTime),
-    text: cue.text,
+    // If the worker returned SSML inside subtitle text, extract readable text
+    text: extractTextFromSsml(cue.text || ''),
   }));
 }
 
@@ -28,16 +30,16 @@ export function parseSRT(content: string): SubtitleCue[] {
 export function parseVTT(content: string): SubtitleCue[] {
   const cues: SubtitleCue[] = [];
   const lines = content.split('\n');
-  
+
   let currentCue: Partial<SubtitleCue> = {};
   let cueId = 1;
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    
+
     // Skip WEBVTT header and empty lines
     if (!line || line.startsWith('WEBVTT')) continue;
-    
+
     // Check if line is a timestamp
     if (line.includes('-->')) {
       const [start, end] = line.split('-->').map(s => s.trim());
@@ -45,13 +47,13 @@ export function parseVTT(content: string): SubtitleCue[] {
       currentCue.startTime = vttTimeToMs(start);
       currentCue.endTime = vttTimeToMs(end);
     } else if (currentCue.startTime !== undefined) {
-      // This is the text content
-      currentCue.text = line;
+      // This is the text content. Strip SSML if present so we display plain text.
+      currentCue.text = extractTextFromSsml(line || '');
       cues.push(currentCue as SubtitleCue);
       currentCue = {};
     }
   }
-  
+
   return cues;
 }
 
@@ -68,7 +70,7 @@ function srtTimeToMs(timeString: string): number {
 function vttTimeToMs(timeString: string): number {
   const parts = timeString.split(':');
   const seconds = parts[parts.length - 1].split('.');
-  
+
   let ms = 0;
   if (parts.length === 3) {
     // HH:MM:SS.mmm
@@ -78,12 +80,12 @@ function vttTimeToMs(timeString: string): number {
     // MM:SS.mmm
     ms += parseInt(parts[0]) * 60000;   // minutes
   }
-  
+
   ms += parseInt(seconds[0]) * 1000;    // seconds
   if (seconds[1]) {
     ms += parseInt(seconds[1]);          // milliseconds
   }
-  
+
   return ms;
 }
 
@@ -121,7 +123,7 @@ export function approximateWordTimings(cue: SubtitleCue): WordTiming[] {
   const words = cue.text.split(/\s+/).filter(w => w.length > 0);
   const duration = cue.endTime - cue.startTime;
   const timePerWord = duration / words.length;
-  
+
   return words.map((word, index) => ({
     word,
     startTime: cue.startTime + (index * timePerWord),
@@ -138,13 +140,13 @@ export function findActiveWord(
 ): { word: string; index: number } | null {
   const timeMs = currentTime * 1000;
   const wordTimings = approximateWordTimings(cue);
-  
+
   const activeIndex = wordTimings.findIndex(
     wt => timeMs >= wt.startTime && timeMs <= wt.endTime
   );
-  
+
   if (activeIndex === -1) return null;
-  
+
   return {
     word: wordTimings[activeIndex].word,
     index: activeIndex,
