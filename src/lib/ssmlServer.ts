@@ -34,6 +34,90 @@ const xmlParser = new XMLParser({
 });
 
 /**
+ * Normalize tokenized artifacts that providers sometimes inject into cue
+ * text. Default behavior: remove pause markers entirely so subtitles only
+ * contain spoken words. Optionally, if configured, replace sufficiently
+ * long pauses with a short human-friendly descriptor (e.g. "[long silence]").
+ */
+function normalizeTokenArtifacts(s: string): string {
+  if (!s || typeof s !== 'string') return '';
+  let out = s;
+
+  // Configuration: whether to show descriptors for long pauses (off by default)
+  const SHOW_PAUSE_DESCRIPTORS =
+    typeof process !== 'undefined' && process.env && process.env.SHOW_PAUSE_DESCRIPTORS === '1';
+  const PAUSE_DESCRIPTOR_THRESHOLD_MS =
+    typeof process !== 'undefined' && process.env && process.env.PAUSE_DESCRIPTOR_THRESHOLD_MS
+      ? parseInt(process.env.PAUSE_DESCRIPTOR_THRESHOLD_MS, 10)
+      : 800; // default 800ms
+
+  // Preserve pause/time markers first by replacing them with placeholders
+  // so subsequent token cleanup doesn't mangle them. Store numeric ms value
+  // (or null if unknown) for decision-making on restore.
+  const pauseMap: Record<string, number | null> = {};
+  let pauseCounter = 0;
+  function makePauseToken(val?: string) {
+    const key = `__PAUSE_${pauseCounter++}__`;
+    let ms: number | null = null;
+    if (val) {
+      try {
+        const raw = String(val).trim().toLowerCase().replace(/ms$/i, '');
+        const n = parseInt(raw, 10);
+        if (!Number.isNaN(n)) ms = n;
+      } catch (e) {
+        ms = null;
+      }
+    }
+    pauseMap[key] = ms;
+    return key;
+  }
+
+  out = out.replace(/\[?\s*pause\s*(\d+ms)?\s*\]?/gi, (_m, p) => makePauseToken(p));
+  out = out.replace(/\btime\s*(\d+)\s*ms\b/gi, (_m, p) => makePauseToken(p + 'ms'));
+  out = out.replace(/\btime\s*(\d+ms)\b/gi, (_m, p) => makePauseToken(p));
+  out = out.replace(/\btime(\d+ms)\b/gi, (_m, p) => makePauseToken(p));
+
+  // Remove known token prefixes/suffixes attached directly to words so they
+  // don't corrupt adjacent text. Do this before camelCase splitting.
+  out = out.replace(/\b(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|lex)(?=[A-Za-z0-9])/gi, '');
+  out = out.replace(/(\w+?)(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|lex)\b/gi, '$1');
+
+  // Break camelCase boundaries and separate letters/digits
+  out = out.replace(/([a-z])([A-Z])/g, '$1 $2');
+  out = out.replace(/([A-Za-z])(?=\d)/g, '$1 ');
+  out = out.replace(/(\d)(?=[A-Za-z])/g, '$1 ');
+
+  // Ensure units like "ms" are separated from trailing words
+  out = out.replace(/\b(ms|s|hz|khz)(?=[A-Za-z])/gi, '$1 ');
+
+  // Remove any remaining standalone token words
+  out = out.replace(/\b(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|strength|rate|pitch|volume|level|alias|interpret-as|lex)\b/gi, ' ');
+
+  // Cleanup punctuation and whitespace (placeholders use underscores so survive)
+  out = out.replace(/[<>\(\)"'*=\/]/g, ' ');
+  out = out.replace(/\s+/g, ' ').trim();
+
+  // Restore pause placeholders — default: remove them. If configured and
+  // the pause exceeds the threshold, insert a short descriptor.
+  for (const key of Object.keys(pauseMap)) {
+    const ms = pauseMap[key];
+    let replacement = '';
+    if (SHOW_PAUSE_DESCRIPTORS && typeof ms === 'number' && ms >= PAUSE_DESCRIPTOR_THRESHOLD_MS) {
+      replacement = ' [long silence] ';
+    }
+    out = out.replace(new RegExp(key, 'g'), replacement);
+  }
+  // Remove any leftover numeric time tokens like "400 ms" which are
+  // provider artifacts and should not appear in user-visible subtitles.
+  out = out.replace(/\b\d+\s*ms\b/gi, '');
+  out = out.replace(/\b\d+\s*s\b/gi, '');
+  // Remove isolated unit tokens if present
+  out = out.replace(/\b(?:ms|s|hz|khz)\b/gi, '');
+  out = out.replace(/\s+/g, ' ').trim();
+  return out;
+}
+
+/**
  * Simple tag extraction to discover used element names.
  */
 function extractTagNames(ssml: string): string[] {
@@ -165,12 +249,10 @@ export function stripSsmlTags(input: string): string {
 
       walk(ast);
       let result = outParts.join(' ').replace(/\s+/g, ' ').trim();
-      // Final cleanup: separate common tag tokens stuck to words (speakHello -> Hello)
-      result = result.replace(/\bspeak\s+/gi, '');
-      result = result.replace(/\btime\s*(\d+)/gi, '$1 ');
-      // remove standalone 'break' tokens left behind
-      result = result.replace(/\bbreak\b/gi, '');
-      return result.trim();
+      // Final cleanup: apply more robust token normalization so provider
+      // artifacts like `speakHello` or `time400msworldspeak` are normalized
+      // into readable text. We'll call a shared normalizer defined below.
+      return normalizeTokenArtifacts(result);
     } catch (e) {
       return null;
     }
@@ -185,29 +267,35 @@ export function stripSsmlTags(input: string): string {
     // Insert spaces between letters and digits (and vice-versa) to separate
     // tokens like time400ms -> time 400ms, and also separate digits from words.
     s = s.replace(/([A-Za-z])(?=\d)/g, '$1 ').replace(/(\d)(?=[A-Za-z])/g, '$1 ');
+    // Separate unit suffixes like "ms" from adjacent words so we don't
+    // accidentally leave them glued to the next token (e.g. "msworld").
+    s = s.replace(/\b(ms|s|hz|khz)(?=[A-Za-z])/gi, '$1 ');
     // Some providers concatenate token words directly to text (e.g. "speakHello").
     // Insert a space after known token prefixes when they're stuck to words.
-    s = s.replace(/(speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|w|lex)(?=[A-Za-z0-9])/gi, '$1 ');
+    s = s.replace(/(speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|lex)(?=[A-Za-z0-9])/gi, '$1 ');
     // Split camelCase boundaries (e.g. "speakHello" -> "speak Hello")
     s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
     // Handle token suffixes like "worldspeak" -> "world speak" so the token
     // can be removed by the subsequent garbage regex.
-    s = s.replace(/(\w+)(speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|w|lex)\b/gi, '$1 $2');
+    s = s.replace(/(\w+)(speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|lex)\b/gi, '$1 $2');
     // Remove known token prefixes at start of the text (e.g. "speakHello" -> "Hello")
     s = s.replace(/^\s*(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|w|lex)\s*(?=[A-Za-z0-9])/i, '');
     // Remove known token suffixes at end of the text (e.g. "worldspeak" -> "world")
     s = s.replace(/(\w+)\s*(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|time|strength|rate|pitch|volume|level|alias|interpret-as|w|lex)\s*$/i, '$1');
     // Convert tokenized time markers like "time 400ms" or "time400ms" into
-    // an explicit pause marker.
+    // an explicit pause marker. Accept spaced forms like "time 400 ms" too.
+    s = s.replace(/\btime\s*(\d+)\s*ms\b/gi, '[pause $1ms]');
     s = s.replace(/\btime\s*(\d+ms)\b/gi, '[pause $1]');
-    const garbage = /\b(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|strength|rate|pitch|volume|level|alias|interpret-as|w|lex)\b/gi;
+    const garbage = /\b(?:speak|break|prosody|emphasis|say-as|say|voice|phoneme|sub|strength|rate|pitch|volume|level|alias|interpret-as|lex)\b/gi;
     s = s.replace(garbage, ' ');
-    s = s.replace(/=+|[:"'<>\/\[\]\(\)\*]/g, ' ');
+    // Keep square brackets so explicit pause markers like "[pause 400ms]"
+    // produced above are preserved. Remove other punctuation.
+    s = s.replace(/=+|[:"'<>\/\(\)\*]/g, ' ');
     s = s.replace(/\s+/g, ' ').trim();
-    return s;
+    // Ensure final normalization to remove any provider token artifacts
+    // or numeric time tokens left by the regex path.
+    return normalizeTokenArtifacts(s);
   }
-
-  // If it looks like SRT/VTT, reconstruct with cleaned cue text only
   if (cueSplit.some(block => timestampRe.test(block))) {
     const cleanedBlocks = cueSplit.map(block => {
       const lines = block.split(/\r?\n/).map(l => l.trim());
@@ -244,6 +332,7 @@ export function ssmlToPlainText(ssml: string): string {
       if (v !== true) return null;
       const ast = xmlParser.parse(ssml);
       const out: string[] = [];
+
       function walk(nodes: any[]) {
         for (const node of nodes) {
           if (typeof node === 'string') { out.push(node); continue; }
@@ -254,9 +343,14 @@ export function ssmlToPlainText(ssml: string): string {
             if (tag === 'break') {
               let timeAttr: string | undefined;
               if (Array.isArray(val)) {
-                for (const e of val) if (e && typeof e === 'object' && e[':@_time']) timeAttr = e[':@_time'];
-              } else if (val && typeof val === 'object' && val[':@_time']) timeAttr = val[':@_time'];
-              out.push(timeAttr ? `[pause ${timeAttr}]` : '[pause]');
+                for (const e of val) {
+                  if (e && typeof e === 'object' && e[':@_time']) timeAttr = e[':@_time'];
+                }
+              } else if (val && typeof val === 'object' && val[':@_time']) {
+                timeAttr = val[':@_time'];
+              }
+              if (timeAttr) out.push(`[pause ${timeAttr}]`);
+              else out.push('[pause]');
               if (Array.isArray(val)) walk(val);
             } else {
               if (Array.isArray(val)) walk(val);
@@ -265,12 +359,12 @@ export function ssmlToPlainText(ssml: string): string {
           }
         }
       }
+
       walk(ast);
       let result = out.join(' ').replace(/\s+/g, ' ').trim();
-      // cleanup
-      result = result.replace(/\bspeak\s+/gi, '').replace(/\bbreak\b/gi, '').trim();
-      return result;
-    } catch {
+      // cleanup + normalize provider token artifacts
+      return normalizeTokenArtifacts(result);
+    } catch (e) {
       return null;
     }
   })();
