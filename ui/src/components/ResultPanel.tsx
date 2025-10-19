@@ -13,10 +13,11 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import SubtitlesRoundedIcon from '@mui/icons-material/SubtitlesRounded';
 import ArchiveRoundedIcon from '@mui/icons-material/ArchiveRounded';
 import HeadphonesRoundedIcon from '@mui/icons-material/HeadphonesRounded';
-import { parseSubtitles, findActiveCue, type SubtitleCue } from '../lib/subtitle';
+import { parseSubtitles, type SubtitleCue } from '../lib/subtitle';
 import { downloadAudio, downloadSubtitle } from '../lib/workerClient';
 import { downloadZip } from '../lib/zip';
 import { createAudioURL } from '../lib/workerClient';
+import { TranscriptPlayer } from './TranscriptPlayer';
 
 interface ResultPanelProps {
   audioBase64: string;
@@ -35,10 +36,9 @@ export function ResultPanel({
 }: ResultPanelProps) {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [cues, setCues] = useState<SubtitleCue[]>([]);
-  const [activeCueId, setActiveCueId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const activeCueRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const url = createAudioURL(audioBase64);
@@ -61,9 +61,7 @@ export function ResultPanel({
     if (!audio) return;
 
     const handleTimeUpdate = () => {
-      const time = audio.currentTime;
-      const activeCue = findActiveCue(cues, time);
-      setActiveCueId(activeCue?.id || null);
+      setCurrentTime(audio.currentTime);
     };
 
     const handleLoadedMetadata = () => {
@@ -77,16 +75,7 @@ export function ResultPanel({
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
-  }, [cues]);
-
-  useEffect(() => {
-    if (activeCueRef.current) {
-      activeCueRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    }
-  }, [activeCueId]);
+  }, []);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
@@ -243,55 +232,17 @@ export function ResultPanel({
               justifyContent="space-between"
               alignItems={{ xs: 'flex-start', sm: 'center' }}
             >
-              <Typography variant="h6">Subtitles</Typography>
+              <Typography variant="h6">Interactive Transcript</Typography>
               <Chip label={subtitleFormat.toUpperCase()} variant="outlined" />
             </Stack>
 
-            <Box
-              tabIndex={0}
-              onKeyDown={handleKeyDown}
-              sx={{
-                maxHeight: { xs: 280, md: 320 },
-                overflowY: 'auto',
-                borderRadius: 2.5,
-                backgroundColor: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(140,130,255,0.08)',
-                px: 2,
-                py: 2,
-                outline: 'none',
-              }}
-            >
-              {cues.map((cue) => {
-                const isActive = cue.id === activeCueId;
-                return (
-                  <Box
-                    key={cue.id}
-                    ref={isActive ? activeCueRef : null}
-                    sx={{
-                      mb: 1.5,
-                      px: 1.5,
-                      py: 1.25,
-                      borderRadius: 2,
-                      border: '1px solid transparent',
-                      backgroundColor: isActive ? 'rgba(140,130,255,0.12)' : 'transparent',
-                      borderColor: isActive ? 'rgba(140,130,255,0.32)' : 'transparent',
-                      transition: 'background-color 0.2s ease, border-color 0.2s ease',
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      {formatTime(cue.startTime / 1000)} → {formatTime(cue.endTime / 1000)}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 0.5 }}>
-                      {cue.text}
-                    </Typography>
-                  </Box>
-                );
-              })}
+            <Box tabIndex={0} onKeyDown={handleKeyDown} sx={{ outline: 'none' }}>
+              <TranscriptPlayer audioRef={audioRef} cues={cues} currentTime={currentTime} />
             </Box>
 
             <Typography variant="caption" color="text.secondary">
-              Word-level highlighting will arrive when the worker exposes granular timestamps. For
-              now, the active caption cue stays centered as audio plays.
+              Click any word to jump to that moment in the audio. The currently spoken word is
+              highlighted as playback progresses.
             </Typography>
           </Stack>
         ) : (
