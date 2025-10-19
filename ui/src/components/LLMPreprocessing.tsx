@@ -75,6 +75,9 @@ export function LLMPreprocessing({
     }
   };
 
+  const missingCredentials =
+    requireCredentials && (!llmEndpoint.trim() || !llmApiKey.trim());
+
   return (
     <Stack spacing={2.25}>
       <Typography variant="subtitle2" color="text.secondary">
@@ -101,7 +104,7 @@ export function LLMPreprocessing({
         placeholder="sk-..."
       />
 
-      {requireCredentials && (
+      {missingCredentials && (
         <Alert severity="warning" sx={{ borderRadius: 2 }}>
           Enter both endpoint and API key to use these enhancements.
         </Alert>
