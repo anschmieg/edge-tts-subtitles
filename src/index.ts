@@ -1,9 +1,10 @@
-import { EdgeTTS, createSRT, createVTT } from 'edge-tts-universal/isomorphic';
+import { EdgeTTS, createSRT, createVTT, listVoices } from 'edge-tts-universal/isomorphic';
 import type { TTSRequest } from './types';
 import { demoHtml } from './demo';
 import { openApiSpec } from './openapi.json';
 import { swaggerHtml } from './swagger-ui';
 import { validateRawSsml, stripSsmlTags, ssmlToPlainText } from './lib/ssmlServer';
+import type { Voice } from 'edge-tts-universal/dist/index';
 
 /**
  * Helper function to convert ArrayBuffer to Base64
@@ -180,6 +181,59 @@ function handleOptions(): Response {
 	});
 }
 
+type VoiceSummary = {
+	shortName: string;
+	friendlyName: string;
+	locale: string;
+	language: string;
+	gender: Voice['Gender'];
+	isMultilingual: boolean;
+	displayName: string;
+};
+
+let cachedVoices: { expiresAt: number; data: VoiceSummary[] } | null = null;
+const VOICE_CACHE_DURATION_MS = 1000 * 60 * 60 * 12; // 12 hours
+
+async function getVoiceSummaries(): Promise<VoiceSummary[]> {
+	const now = Date.now();
+	if (cachedVoices && cachedVoices.expiresAt > now) {
+		return cachedVoices.data;
+	}
+
+	const rawVoices = await listVoices();
+	const summaries = rawVoices.map<VoiceSummary>((voice) => {
+		const language = voice.Locale.split('-')[0] || voice.Locale;
+		const friendlyName = voice.FriendlyName || voice.ShortName;
+		const displayName = `${friendlyName} (${voice.Locale})`;
+		const isMultilingual =
+			/Multilingual/i.test(voice.ShortName) ||
+			/Multilingual/i.test(voice.Name) ||
+			/Multilingual/i.test(friendlyName);
+
+		return {
+			shortName: voice.ShortName,
+			friendlyName,
+			locale: voice.Locale,
+			language,
+			gender: voice.Gender,
+			isMultilingual,
+			displayName,
+		};
+	});
+
+	summaries.sort((a, b) => {
+		if (a.language !== b.language) return a.language.localeCompare(b.language);
+		if (a.locale !== b.locale) return a.locale.localeCompare(b.locale);
+		return a.friendlyName.localeCompare(b.friendlyName);
+	});
+
+	cachedVoices = {
+		expiresAt: now + VOICE_CACHE_DURATION_MS,
+		data: summaries,
+	};
+	return summaries;
+}
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		if (request.method === 'OPTIONS') {
@@ -193,6 +247,33 @@ export default {
 
 		try {
 			switch (url.pathname) {
+				case '/v1/voices': {
+					if (request.method !== 'GET') {
+						return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+							status: 405,
+							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+						});
+					}
+
+					try {
+						const voices = await getVoiceSummaries();
+						return new Response(JSON.stringify({ voices }), {
+							status: 200,
+							headers: {
+								...corsHeaders,
+								'Content-Type': 'application/json',
+								'Cache-Control': 'public, max-age=3600',
+							},
+						});
+					} catch (error) {
+						console.error('Error fetching voice list:', error);
+						return new Response(JSON.stringify({ error: 'Failed to load voice list' }), {
+							status: 500,
+							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+						});
+					}
+				}
+
 				case '/__health': {
 					// Lightweight health endpoint for UI reachability probes.
 					if (request.method === 'GET' || request.method === 'HEAD') {
@@ -379,7 +460,9 @@ export default {
 							subtitleContent = stripSsmlTags(subtitleContentRaw || '');
 						}
 					} else {
-						subtitleContent = stripSsmlTags(subtitleContentRaw || '');
+						const raw = subtitleContentRaw || '';
+						const hasMarkup = /<[a-zA-Z][\s\S]*?>/.test(raw);
+						subtitleContent = hasMarkup ? stripSsmlTags(raw) : raw.trim();
 					}
 					if (debugEnabled) {
 						console.log('SSML debug: subtitleContent preview:', (subtitleContentRaw || '').slice(0, 300));
