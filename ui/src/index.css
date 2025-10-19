@@ -46,3 +46,36 @@ textarea {
   background: transparent;
   color: inherit;
 }
+
+.snap-card {
+  transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 450ms ease,
+    opacity 450ms ease;
+  transform: scale(0.97);
+  filter: brightness(0.85);
+  opacity: 0.75;
+}
+
+.snap-card-active {
+  transform: scale(1);
+  filter: brightness(1);
+  opacity: 1;
+}
+
+[data-snap-disabled='true'] {
+  scroll-snap-type: none !important;
+}
+
+.snap-card-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 130, 255, 0.25) transparent;
+}
+
+.snap-card-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.snap-card-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(140, 130, 255, 0.25);
+}

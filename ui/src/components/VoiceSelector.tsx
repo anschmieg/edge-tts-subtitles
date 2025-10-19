@@ -3,7 +3,6 @@ import {
   Box,
   Chip,
   CircularProgress,
-  IconButton,
   InputAdornment,
   List,
   ListItem,
@@ -16,6 +15,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import Button from '@mui/material/Button';
 import RadioButtonCheckedRoundedIcon from '@mui/icons-material/RadioButtonCheckedRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
@@ -271,20 +271,23 @@ export function VoiceSelector({
                     <ListItem
                       key={voice.shortName}
                       disablePadding
-                      secondaryAction={
-                        <Tooltip title={isPlaying ? 'Stop preview' : 'Play sample'} arrow>
-                          <IconButton
-                            edge="end"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handlePreview(voice);
-                            }}
-                            color={isPlaying ? 'primary' : 'default'}
-                          >
-                            {isPlaying ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
-                          </IconButton>
-                        </Tooltip>
-                      }
+                    secondaryAction={
+                      <Tooltip title={isPlaying ? 'Stop preview' : 'Play sample'} arrow>
+                        <Button
+                          variant="contained"
+                          color={isPlaying ? 'primary' : 'secondary'}
+                          size="small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handlePreview(voice);
+                          }}
+                          startIcon={isPlaying ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
+                          sx={{ borderRadius: 999, px: 2 }}
+                        >
+                          {isPlaying ? 'Stop' : 'Play'}
+                        </Button>
+                      </Tooltip>
+                    }
                     >
                       <ListItemButton
                         onClick={() => onVoiceChange(voice.shortName)}
@@ -383,14 +386,17 @@ function SelectedVoiceCard({
             </Typography>
           )}
         </Stack>
-        <Tooltip title={playing ? 'Stop preview' : 'Play sample'} arrow>
-          <IconButton
+        <Tooltip title={playing ? 'Stop preview' : 'Play preview'} arrow>
+          <Button
+            variant="contained"
             color="warning"
             onClick={() => onPreview(voice)}
-            sx={{ backgroundColor: 'rgba(255,180,120,0.24)' }}
+            startIcon={playing ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
+            size="small"
+            sx={{ borderRadius: 999, px: 2.5 }}
           >
-            {playing ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
-          </IconButton>
+            {playing ? 'Stop preview' : 'Play preview'}
+          </Button>
         </Tooltip>
       </Stack>
     </Box>

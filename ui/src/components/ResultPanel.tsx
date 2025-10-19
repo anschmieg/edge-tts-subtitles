@@ -129,14 +129,29 @@ export function ResultPanel({
 
   return (
     <Card
+      className="snap-card"
       sx={{
         borderRadius: 3,
-        height: '100%',
         display: 'flex',
         flexDirection: 'column',
+        minHeight: { xs: '80vh', md: '72vh' },
+        width: { xs: '100%', md: 'min(100%, 960px)' },
+        mx: 'auto',
       }}
     >
-      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1 }}>
+      <CardContent
+        className="snap-card-scroll"
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+          flexGrow: 1,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          px: { xs: 3, md: 4 },
+          py: { xs: 3, md: 4 },
+        }}
+      >
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}

@@ -1,4 +1,5 @@
-import { Box, Slider, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Grid, Slider, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import InputAdornment from '@mui/material/InputAdornment';
 
 type PitchUnit = 'percent' | 'hz' | 'semitone';
 
@@ -23,51 +24,51 @@ export function ProsodyControls({
   onPitchUnitChange,
   onVolumeChange,
 }: ProsodyControlsProps) {
-  const displayPitchValue = convertSemitoneToUnit(pitchSteps, pitchUnit);
-  const { min, max, step } = getPitchRange(pitchUnit);
+  const pitchDisplayValue = convertSemitoneToUnit(pitchSteps, pitchUnit);
+  const pitchRange = getPitchRange(pitchUnit);
 
   return (
     <Stack spacing={3}>
-      <Typography variant="body2" color="text.secondary">
-        Fine-tune pace, tone, and loudness. Neutral values keep the original voice character.
-      </Typography>
+      <Stack spacing={0.75}>
+        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+          Fine-tune pace, tone, and loudness.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Neutral values keep the original voice character. Adjust only when you need a specific delivery.
+        </Typography>
+      </Stack>
 
-      <SliderField
+      <SliderRow
         label="Rate"
-        helper="0–200% · Default 100%"
+        description="0–200% · Default 100%"
         min={0}
         max={200}
         step={1}
         value={rate}
-        onSliderChange={onRateChange}
-        onInputChange={onRateChange}
-        inputSuffix="%"
+        onChange={onRateChange}
+        adornment="%"
       />
 
-      <Stack spacing={1.5}>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1}
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          justifyContent="space-between"
-        >
-          <Typography variant="subtitle2" color="text.secondary">
+      <Stack spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
             Pitch
           </Typography>
           <ToggleButtonGroup
             size="small"
             exclusive
             value={pitchUnit}
-            onChange={(_, newUnit: PitchUnit | null) => {
-              if (!newUnit || newUnit === pitchUnit) return;
-              const semitoneValue = convertUnitToSemitone(displayPitchValue, pitchUnit);
-              onPitchUnitChange(newUnit);
-              onPitchValueChange(semitoneValue);
+            onChange={(_, nextUnit: PitchUnit | null) => {
+              if (!nextUnit || nextUnit === pitchUnit) return;
+              const semitone = convertUnitToSemitone(pitchDisplayValue, pitchUnit);
+              onPitchUnitChange(nextUnit);
+              onPitchValueChange(semitone);
             }}
             sx={{
               '& .MuiToggleButton-root': {
-                textTransform: 'none',
                 borderRadius: 999,
+                textTransform: 'none',
+                px: 1.5,
               },
             }}
           >
@@ -76,103 +77,104 @@ export function ProsodyControls({
             <ToggleButton value="semitone">Half notes</ToggleButton>
           </ToggleButtonGroup>
         </Stack>
-        <SliderField
+        <SliderRow
           label="Adjustment"
-          helper={getPitchHelper(pitchUnit)}
-          min={min}
-          max={max}
-          step={step}
-          value={displayPitchValue}
-          onSliderChange={(value) => onPitchValueChange(convertUnitToSemitone(value, pitchUnit))}
-          onInputChange={(value) => onPitchValueChange(convertUnitToSemitone(value, pitchUnit))}
-          inputSuffix={getPitchSuffix(pitchUnit)}
+          description={getPitchHelper(pitchUnit)}
+          min={pitchRange.min}
+          max={pitchRange.max}
+          step={pitchRange.step}
+          value={pitchDisplayValue}
+          onChange={(value) => onPitchValueChange(convertUnitToSemitone(value, pitchUnit))}
+          adornment={getPitchSuffix(pitchUnit)}
         />
       </Stack>
 
-      <SliderField
+      <SliderRow
         label="Volume"
-        helper="+ is louder · − is softer"
+        description="−50 to +50 · Default 0"
         min={-50}
         max={50}
         step={1}
         value={volume}
-        onSliderChange={onVolumeChange}
-        onInputChange={onVolumeChange}
-        inputSuffix="%"
+        onChange={onVolumeChange}
+        adornment="%"
       />
     </Stack>
   );
 }
 
-interface SliderFieldProps {
+interface SliderRowProps {
   label: string;
-  helper: string;
+  description: string;
   min: number;
   max: number;
   step: number;
   value: number;
-  inputSuffix: string;
-  onSliderChange: (value: number) => void;
-  onInputChange: (value: number) => void;
+  adornment: string;
+  onChange: (value: number) => void;
 }
 
-function SliderField({
-  label,
-  helper,
-  min,
-  max,
-  step,
-  value,
-  inputSuffix,
-  onSliderChange,
-  onInputChange,
-}: SliderFieldProps) {
-  const clampValue = (val: number) => Math.max(min, Math.min(max, val));
+function SliderRow({ label, description, min, max, step, value, adornment, onChange }: SliderRowProps) {
+  const clamped = clamp(value, min, max);
+
+  const handleSliderChange = (_: Event, sliderValue: number | number[]) => {
+    const next = Array.isArray(sliderValue) ? sliderValue[0] : sliderValue;
+    onChange(clamp(next, min, max));
+  };
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = Number(event.target.value);
+    if (Number.isFinite(next)) {
+      onChange(clamp(next, min, max));
+    }
+  };
 
   return (
-    <Stack spacing={1.5}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="subtitle2" color="text.secondary">
+    <Stack spacing={1.25}>
+      <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
           {label}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {helper}
+          {description}
         </Typography>
       </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-        <Slider
-          value={value}
-          min={min}
-          max={max}
-          step={step}
-          onChange={(_, newValue) => onSliderChange(clampValue(Number(newValue)))}
-          sx={{ flexGrow: 1 }}
-          valueLabelDisplay="auto"
-        />
-        <Box sx={{ width: 110 }}>
-          <TextField
-            type="number"
-            size="small"
-            value={Number.isFinite(value) ? value : 0}
-            onChange={(event) => {
-              const parsed = Number(event.target.value);
-              if (Number.isFinite(parsed)) {
-                onInputChange(clampValue(parsed));
-              }
-            }}
-            InputProps={{
-              endAdornment: (
-                <Typography variant="caption" color="text.secondary">
-                  {inputSuffix}
-                </Typography>
-              ),
-              inputProps: { step, min, max },
+      <Grid container spacing={2} alignItems="center">
+        <Grid item xs={12} md>
+          <Slider
+            value={clamped}
+            min={min}
+            max={max}
+            step={step}
+            onChange={handleSliderChange}
+            sx={{
+              height: 4,
+              '& .MuiSlider-thumb': {
+                width: 14,
+                height: 14,
+              },
             }}
           />
-        </Box>
-      </Stack>
+        </Grid>
+        <Grid item>
+          <TextField
+            value={clamped}
+            onChange={handleInputChange}
+            size="small"
+            sx={{ width: 96 }}
+            InputProps={{
+              inputProps: { step, min, max },
+              endAdornment: <InputAdornment position="end">{adornment}</InputAdornment>,
+            }}
+          />
+        </Grid>
+      </Grid>
     </Stack>
   );
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function convertSemitoneToUnit(steps: number, unit: PitchUnit): number {
@@ -214,9 +216,9 @@ function getPitchRange(unit: PitchUnit) {
 function getPitchHelper(unit: PitchUnit): string {
   switch (unit) {
     case 'percent':
-      return '+ raises pitch · − lowers pitch (percent change)';
+      return 'Positive values raise the pitch (%)';
     case 'hz':
-      return '+ raises pitch · − lowers pitch (approximate Hz)';
+      return 'Positive values raise the pitch (Hz)';
     case 'semitone':
     default:
       return '+ raises pitch · − lowers pitch (half notes)';

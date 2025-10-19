@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import {
   Alert,
   AppBar,
@@ -11,7 +11,11 @@ import {
   Collapse,
   Container,
   Divider,
+  FormControl,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Switch,
   Tab,
@@ -19,7 +23,10 @@ import {
   TextField,
   Toolbar,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import LaunchRoundedIcon from '@mui/icons-material/LaunchRounded';
 import { VoiceSelector } from './components/VoiceSelector';
@@ -34,6 +41,7 @@ import {
 } from './lib/workerClient';
 import { formatSelectedVoiceLabel } from './lib/voiceDisplay';
 
+const DEFAULT_VOICE_ID = 'en-US-EmmaMultilingualNeural';
 const DEFAULT_RATE = 100;
 const DEFAULT_PITCH_STEPS = 0;
 const DEFAULT_VOLUME = 0;
@@ -75,13 +83,16 @@ function getLanguageLabel(displayNames: Intl.DisplayNames | null, code: string):
 }
 
 function App() {
+  const theme = useTheme();
+  const isWideTabs = useMediaQuery(theme.breakpoints.up('md'));
   const [text, setText] = useState(
     'Hello, world! This is a test of the Edge TTS Subtitles service.'
   );
   const [voices, setVoices] = useState<WorkerVoice[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
   const [voicesError, setVoicesError] = useState<string>('');
-  const [voice, setVoice] = useState<string | null>(null);
+  const [voicesFetched, setVoicesFetched] = useState(false);
+  const [voice, setVoice] = useState<string | null>(DEFAULT_VOICE_ID);
   const [voiceManuallySet, setVoiceManuallySet] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('all');
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
@@ -106,6 +117,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabValue>('script');
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const snapDisableTimeout = useRef<number | null>(null);
+  const enhancementsActive = optimizeForTTS || addSSML;
 
   const languageFormatter = useMemo(() => {
     try {
@@ -116,6 +130,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (activeTab !== 'voice' || voicesFetched || voicesLoading) {
+      return;
+    }
+
     let cancelled = false;
     setVoicesLoading(true);
     setVoicesError('');
@@ -123,6 +141,10 @@ function App() {
       .then((data) => {
         if (cancelled) return;
         setVoices(data);
+        setVoicesFetched(true);
+        if (!voiceManuallySet && data.length && !voice) {
+          setVoice(data[0].shortName);
+        }
       })
       .catch((err) => {
         console.error('Failed to load voices', err);
@@ -138,7 +160,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeTab, voicesFetched, voicesLoading, voiceManuallySet, voice]);
 
   useEffect(() => {
     if (voiceManuallySet) return;
@@ -161,6 +183,117 @@ function App() {
       setActiveTab('script');
     }
   }, [result, activeTab]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    const cards = Array.from(
+      container.querySelectorAll<HTMLElement>(':scope > .snap-card')
+    );
+    if (!cards.length) {
+      return;
+    }
+
+    cards.forEach((card) => card.classList.remove('snap-card-active'));
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          entry.target.classList.toggle('snap-card-active', entry.isIntersecting);
+        });
+      },
+      { root: container, threshold: 0.7 }
+    );
+
+    cards.forEach((card) => observer.observe(card));
+    if (cards[0]) {
+      cards[0].classList.add('snap-card-active');
+    }
+
+    return () => {
+      cards.forEach((card) => observer.unobserve(card));
+      observer.disconnect();
+    };
+  }, [result, activeTab, subtitlesEnabled, subtitleFormat]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollables = Array.from(
+      container.querySelectorAll<HTMLElement>('.snap-card-scroll')
+    );
+    const wheelHandlers: Array<{ el: HTMLElement; handler: (event: WheelEvent) => void }> = [];
+    const touchHandlers: Array<{ el: HTMLElement; start: (event: TouchEvent) => void; move: (event: TouchEvent) => void }> = [];
+    const touchStartMap = new WeakMap<HTMLElement, number>();
+
+    const disableSnapTemporarily = () => {
+      if (!container) return;
+      container.dataset.snapDisabled = 'true';
+      if (snapDisableTimeout.current !== null) {
+        window.clearTimeout(snapDisableTimeout.current);
+      }
+      snapDisableTimeout.current = window.setTimeout(() => {
+        if (container) {
+          delete container.dataset.snapDisabled;
+        }
+        snapDisableTimeout.current = null;
+      }, 220);
+    };
+
+    scrollables.forEach((el) => {
+      const onWheel = (event: WheelEvent) => {
+        if (el.scrollHeight <= el.clientHeight) return;
+        const deltaY = event.deltaY;
+        const atTop = el.scrollTop <= 0;
+        const atBottom = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1;
+        if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) {
+          event.stopPropagation();
+          disableSnapTemporarily();
+        }
+      };
+      const onTouchStart = (event: TouchEvent) => {
+        if (event.touches.length === 1) {
+          touchStartMap.set(el, event.touches[0].clientY);
+        }
+      };
+      const onTouchMove = (event: TouchEvent) => {
+        if (el.scrollHeight <= el.clientHeight) return;
+        const startY = touchStartMap.get(el);
+        if (startY == null) return;
+        const currentY = event.touches[0].clientY;
+        const deltaY = startY - currentY;
+        const atTop = el.scrollTop <= 0;
+        const atBottom = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1;
+        if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) {
+          event.stopPropagation();
+          disableSnapTemporarily();
+        }
+      };
+
+      el.addEventListener('wheel', onWheel, { passive: true });
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: true });
+      wheelHandlers.push({ el, handler: onWheel });
+      touchHandlers.push({ el, start: onTouchStart, move: onTouchMove });
+    });
+
+    return () => {
+      wheelHandlers.forEach(({ el, handler }) => el.removeEventListener('wheel', handler));
+      touchHandlers.forEach(({ el, start, move }) => {
+        el.removeEventListener('touchstart', start);
+        el.removeEventListener('touchmove', move);
+      });
+      if (snapDisableTimeout.current !== null) {
+        window.clearTimeout(snapDisableTimeout.current);
+        snapDisableTimeout.current = null;
+      }
+      delete container.dataset.snapDisabled;
+    };
+  }, [activeTab, result, subtitlesEnabled, subtitleFormat, optimizeForTTS, addSSML]);
 
   const selectedVoiceMeta = useMemo(
     () => voices.find((candidate) => candidate.shortName === voice) ?? null,
@@ -304,11 +437,18 @@ function App() {
   const pitchSummaryValue = formatPitchSummary(pitchSteps, pitchUnit);
   const rateSummary = `${rate}%`;
   const volumeSummary = volume === 0 ? '0%' : `${volume > 0 ? '+' : ''}${volume}%`;
-  const enhancementsActive = optimizeForTTS || addSSML;
   const llmRequiresConfig =
     enhancementsActive && (!llmEndpoint.trim() || !llmApiKey.trim());
   const isGenerateDisabled =
     loading || !voice || !text.trim() || llmRequiresConfig;
+
+  const handleTabChange = (_event: SyntheticEvent, value: TabValue) => {
+    setActiveTab(value);
+  };
+
+  const handleTabSelect = (event: SelectChangeEvent<TabValue>) => {
+    setActiveTab(event.target.value as TabValue);
+  };
 
   return (
     <Box
@@ -323,7 +463,7 @@ function App() {
         position="static"
         color="transparent"
         elevation={0}
-        sx={{ borderBottom: '1px solid', borderColor: 'divider', backdropFilter: 'blur(12px)' }}
+        sx={{ borderBottom: '1px solid', borderColor: 'divider', backdropFilter: 'blur(12px)', flexShrink: 0 }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', gap: 2, py: 2 }}>
           <Stack spacing={0.5}>
@@ -360,7 +500,7 @@ function App() {
         }}
       >
         <Container
-          maxWidth="md"
+          maxWidth="lg"
           sx={{
             flex: 1,
             display: 'flex',
@@ -372,6 +512,7 @@ function App() {
         >
           <Stack
             data-testid="snap-stack"
+            ref={scrollContainerRef}
             spacing={{ xs: 3, md: 4 }}
             sx={{
               flex: 1,
@@ -380,12 +521,15 @@ function App() {
               overflowY: 'scroll',
               overscrollBehaviorY: 'contain',
               WebkitOverflowScrolling: 'touch',
+              scrollBehavior: 'smooth',
               scrollSnapType: 'y mandatory',
               scrollSnapStop: 'always',
               scrollPaddingTop: (theme) => theme.spacing(3),
               pb: 4,
               pr: { xs: 1, md: 2 },
               pl: { xs: 1, md: 2 },
+               scrollbarWidth: 'none',
+               '&::-webkit-scrollbar': { display: 'none' },
               '& > *': {
                 scrollSnapAlign: 'start',
                 scrollSnapStop: 'always',
@@ -394,6 +538,7 @@ function App() {
             }}
           >
             <Card
+              className="snap-card"
               sx={{
                 position: 'relative',
                 overflow: 'hidden',
@@ -404,6 +549,8 @@ function App() {
                 px: { xs: 3, md: 6 },
                 py: { xs: 4, md: 6 },
                 minHeight: { xs: '80vh', md: '72vh' },
+                width: { xs: '100%', md: 'min(100%, 960px)' },
+                mx: 'auto',
               }}
             >
               <CardContent sx={{ px: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
@@ -433,133 +580,321 @@ function App() {
             </Card>
 
             <Card
+              className="snap-card"
               component="form"
               onSubmit={handleSubmit}
               sx={{
                 borderRadius: 3,
                 minHeight: { xs: '80vh', md: '72vh' },
+                width: { xs: '100%', md: 'min(100%, 960px)' },
+                mx: 'auto',
               }}
             >
-              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minHeight: 0 }}>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Chip
-                    label={
-                      selectedVoiceMeta
-                        ? formatSelectedVoiceLabel(selectedVoiceMeta, languageFormatter ?? undefined)
-                        : voicesLoading
-                        ? 'Loading voices…'
-                        : voicesError
-                        ? 'Voice list unavailable'
-                        : 'Select a voice'
-                    }
-                    variant="outlined"
-                    color={selectedVoiceMeta ? 'primary' : 'default'}
-                  />
-                  <Chip label={subtitleSummary} variant="outlined" />
-                  <Chip
-                    label={
-                      isProsodyDefault
-                        ? 'Delivery: default'
-                        : `Delivery tweaked (${rateSummary}, ${pitchSummaryValue}, ${volumeSummary})`
-                    }
-                    variant="outlined"
-                  />
-                  {enhancementsActive && (
-                    <Chip label="LLM enhancements" color="secondary" variant="outlined" />
-                  )}
-                </Stack>
-
-                <Tabs
-                  value={activeTab}
-                  onChange={(_, value) => setActiveTab(value as TabValue)}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                  allowScrollButtonsMobile
-                  textColor="primary"
-                  indicatorColor="primary"
+              <CardContent
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flex: 1,
+                  minHeight: 0,
+                  px: { xs: 2.5, md: 4 },
+                  py: { xs: 3, md: 4 },
+                }}
+              >
+                <Box
+                  className="snap-card-scroll"
                   sx={{
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(140,130,255,0.08)',
-                    px: 1,
-                    '& .MuiTab-root': {
-                      color: 'text.secondary',
-                      fontWeight: 600,
-                      borderRadius: 1.5,
-                      minHeight: 48,
-                    },
-                    '& .Mui-selected': {
-                      color: 'primary.main',
-                      backgroundColor: 'rgba(140,130,255,0.18)',
-                    },
-                    '& .MuiTabs-indicator': {
-                      height: 4,
-                      borderRadius: 2,
-                    },
+                    overflowY: 'auto',
+                    overscrollBehavior: 'contain',
+                    pr: { xs: 1, md: 2 },
+                    pb: 4,
+                    mr: { xs: -1, md: -2 },
                   }}
                 >
-                  {tabItems.map((tab) => (
-                    <Tab
-                      key={tab.value}
-                      value={tab.value}
-                      label={tab.label}
-                      {...tabA11yProps(tab.value)}
-                    />
-                  ))}
-                </Tabs>
-
-                <Divider />
-
-                <TabPanel current={activeTab} value="script">
-                  <Stack spacing={1.5}>
-                    <TextField
-                      multiline
-                      minRows={5}
-                      label="Script"
-                      value={text}
-                      onChange={(event) => setText(event.target.value)}
-                      placeholder="Type or paste the lines you want spoken."
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Tip: keep sentences short and clear for the most natural speech.
-                    </Typography>
-                  </Stack>
-                </TabPanel>
-
-                <TabPanel current={activeTab} value="voice">
-                  <Stack spacing={2.5}>
-                        <Typography variant="body2" color="text.secondary">
-                          Choose a language to filter the catalog. Preview playback stays open so you
-                          can audition multiple voices quickly.
-                        </Typography>
-                    <VoiceSelector
-                      voices={voices}
-                      selectedVoice={voice}
-                      onVoiceChange={handleVoiceChange}
-                      languages={languages}
-                      selectedLanguage={selectedLanguage}
-                      onLanguageChange={handleLanguageChange}
-                      loading={voicesLoading}
-                    />
-                    {voicesError && (
-                      <Alert severity="error" onClose={() => setVoicesError('')}>
-                        {voicesError}
-                      </Alert>
-                    )}
-                  </Stack>
-                </TabPanel>
-
-                <TabPanel current={activeTab} value="delivery">
                   <Stack spacing={3}>
-                    <ProsodyControls
-                      rate={rate}
-                      pitchSteps={pitchSteps}
-                      pitchUnit={pitchUnit}
-                      volume={volume}
-                      onRateChange={setRate}
-                      onPitchValueChange={setPitchSteps}
-                      onPitchUnitChange={setPitchUnit}
-                      onVolumeChange={setVolume}
-                    />
+                    <Stack spacing={1}>
+                      <Typography variant="overline" color="primary">
+                        Snapshot
+                      </Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                        <Chip
+                          label={
+                            selectedVoiceMeta
+                              ? formatSelectedVoiceLabel(selectedVoiceMeta, languageFormatter ?? undefined)
+                              : voicesLoading
+                              ? 'Loading voices…'
+                              : voicesError
+                              ? 'Voice list unavailable'
+                              : 'Select a voice'
+                          }
+                          variant="outlined"
+                          color={selectedVoiceMeta ? 'primary' : 'default'}
+                        />
+                        <Chip label={subtitleSummary} variant="outlined" />
+                        <Chip
+                          label={
+                            isProsodyDefault
+                              ? 'Delivery: default'
+                              : `Delivery tweaked (${rateSummary}, ${pitchSummaryValue}, ${volumeSummary})`
+                          }
+                          variant="outlined"
+                        />
+                        {enhancementsActive && (
+                          <Chip label="LLM enhancements" color="secondary" variant="outlined" />
+                        )}
+                      </Stack>
+                    </Stack>
+
+                    {isWideTabs ? (
+                      <Tabs
+                        value={activeTab}
+                        onChange={handleTabChange}
+                        variant="fullWidth"
+                        textColor="primary"
+                        indicatorColor="primary"
+                        TabIndicatorProps={{
+                          sx: {
+                            height: 2,
+                            borderRadius: 999,
+                            bottom: 6,
+                            left: 16,
+                            right: 16,
+                            backgroundColor: theme.palette.primary.main,
+                            opacity: 0.7,
+                          },
+                        }}
+                        sx={{
+                          borderRadius: 2,
+                          backgroundColor: 'rgba(140,130,255,0.08)',
+                          '& .MuiTab-root': {
+                            color: 'text.secondary',
+                            fontWeight: 600,
+                            borderRadius: 1.5,
+                            minHeight: 48,
+                          },
+                          '& .Mui-selected': {
+                            color: 'primary.main',
+                            backgroundColor: 'rgba(140,130,255,0.18)',
+                          },
+                        }}
+                      >
+                        {tabItems.map((tab) => (
+                          <Tab
+                            key={tab.value}
+                            value={tab.value}
+                            label={tab.label}
+                            {...tabA11yProps(tab.value)}
+                          />
+                        ))}
+                      </Tabs>
+                    ) : (
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="section-select-label">Section</InputLabel>
+                        <Select
+                          labelId="section-select-label"
+                          value={activeTab}
+                          label="Section"
+                          onChange={handleTabSelect}
+                        >
+                          {tabItems.map((tab) => (
+                            <MenuItem key={tab.value} value={tab.value}>
+                              {tab.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+
+                    <Divider />
+
+                    <TabPanel current={activeTab} value="script">
+                      <Stack spacing={2}>
+                        <Stack spacing={0.75}>
+                          <Typography variant="overline" color="primary">
+                            Step 1
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Craft your script
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Provide the narration you want to hear. You can add multiple paragraphs or paste a full script.
+                          </Typography>
+                        </Stack>
+                        <TextField
+                          multiline
+                          minRows={5}
+                          label="Script"
+                          value={text}
+                          onChange={(event) => setText(event.target.value)}
+                          placeholder="Type or paste the lines you want spoken."
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Tip: keep sentences short and clear for the most natural speech.
+                        </Typography>
+                      </Stack>
+                    </TabPanel>
+
+                    <TabPanel current={activeTab} value="voice">
+                      <Stack spacing={2.5}>
+                        <Stack spacing={0.75}>
+                          <Typography variant="overline" color="primary">
+                            Step 2
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Choose a voice and language
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Filter by language, audition samples, and pick the voice that matches your project.
+                          </Typography>
+                        </Stack>
+                        <VoiceSelector
+                          voices={voices}
+                          selectedVoice={voice}
+                          onVoiceChange={handleVoiceChange}
+                          languages={languages}
+                          selectedLanguage={selectedLanguage}
+                          onLanguageChange={handleLanguageChange}
+                          loading={voicesLoading}
+                        />
+                        {voicesError && (
+                          <Alert severity="error" onClose={() => setVoicesError('')}>
+                            {voicesError}
+                          </Alert>
+                        )}
+                      </Stack>
+                    </TabPanel>
+
+                    <TabPanel current={activeTab} value="delivery">
+                      <Stack spacing={3}>
+                        <Stack spacing={0.75}>
+                          <Typography variant="overline" color="primary">
+                            Step 3
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Shape the delivery and subtitles
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Adjust pace, pitch, and loudness. Decide whether to export timed subtitles.
+                          </Typography>
+                        </Stack>
+                        <ProsodyControls
+                          rate={rate}
+                          pitchSteps={pitchSteps}
+                          pitchUnit={pitchUnit}
+                          volume={volume}
+                          onRateChange={setRate}
+                          onPitchValueChange={setPitchSteps}
+                          onPitchUnitChange={setPitchUnit}
+                          onVolumeChange={setVolume}
+                        />
+
+                        <Stack spacing={1.5}>
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            spacing={1}
+                            alignItems={{ xs: 'flex-start', sm: 'center' }}
+                            justifyContent="space-between"
+                          >
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              Subtitle export
+                            </Typography>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={subtitlesEnabled}
+                                  onChange={(event) => setSubtitlesEnabled(event.target.checked)}
+                                  color="primary"
+                                />
+                              }
+                              label="Include subtitles"
+                              sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
+                            />
+                          </Stack>
+                          <Collapse in={subtitlesEnabled}>
+                            <Stack spacing={1.5}>
+                              <Typography variant="body2" color="text.secondary">
+                                Toggle between SubRip and WebVTT formats.
+                              </Typography>
+                              <FormControlLabel
+                                control={
+                                  <Switch
+                                    checked={subtitleFormat === 'vtt'}
+                                    onChange={(event) =>
+                                      setSubtitleFormat(event.target.checked ? 'vtt' : 'srt')
+                                    }
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  subtitleFormat === 'vtt'
+                                    ? 'WebVTT (.vtt)'
+                                    : 'SubRip (.srt)'
+                                }
+                                sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
+                              />
+                            </Stack>
+                          </Collapse>
+                        </Stack>
+                      </Stack>
+                    </TabPanel>
+
+                    <TabPanel current={activeTab} value="enhance">
+                      <Stack spacing={2.5}>
+                        <Stack spacing={0.75}>
+                          <Typography variant="overline" color="primary">
+                            Step 4
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Enhance with AI (optional)
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Connect an LLM to polish your script or add SSML annotations directly in the browser.
+                          </Typography>
+                        </Stack>
+
+                        <EnhancementCard>
+                          <LLMPreprocessing
+                            llmEndpoint={llmEndpoint}
+                            onLLMEndpointChange={setLLMEndpoint}
+                            llmApiKey={llmApiKey}
+                            onLLMApiKeyChange={setLLMApiKey}
+                            requireCredentials={enhancementsActive}
+                          />
+                        </EnhancementCard>
+
+                        <EnhancementOptionCard
+                          title="Optimize text for better reading flow"
+                          description="Cleans numbers, abbreviations, and symbols so speech reads naturally while staying true to the original content."
+                          checked={optimizeForTTS}
+                          onToggle={setOptimizeForTTS}
+                        />
+
+                        <EnhancementOptionCard
+                          title="Fine-tune pronunciation using AI"
+                          subtitle="Adds SSML markup"
+                          description="Adds SSML markup for pauses, emphasis, and pronunciation control."
+                          checked={addSSML}
+                          onToggle={setAddSSML}
+                        />
+                      </Stack>
+                    </TabPanel>
+
+                    {result && (
+                      <TabPanel current={activeTab} value="result">
+                        <Stack spacing={1.5}>
+                          <Typography variant="overline" color="primary">
+                            Step 5
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Review & download
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Scroll to the Output card below to play your audio, review subtitles, and download files.
+                          </Typography>
+                        </Stack>
+                      </TabPanel>
+                    )}
+
+                    <Divider />
 
                     <Stack spacing={1.5}>
                       <Stack
@@ -568,156 +903,92 @@ function App() {
                         alignItems={{ xs: 'flex-start', sm: 'center' }}
                         justifyContent="space-between"
                       >
-                        <Typography variant="subtitle1">Subtitles & downloads</Typography>
+                        <Stack spacing={0.25}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            Final step
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Enable mock mode for demo output without calling the worker.
+                          </Typography>
+                        </Stack>
                         <FormControlLabel
                           control={
                             <Switch
-                              checked={subtitlesEnabled}
-                              onChange={(event) => setSubtitlesEnabled(event.target.checked)}
+                              checked={mockMode}
+                              onChange={(event) => setMockMode(event.target.checked)}
                               color="primary"
                             />
                           }
-                          label="Include subtitles"
+                          label="Mock mode"
                           sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
                         />
                       </Stack>
-                      <Collapse in={subtitlesEnabled}>
-                        <Stack spacing={1.5}>
-                          <Typography variant="body2" color="text.secondary">
-                            Toggle between SubRip and WebVTT formats.
-                          </Typography>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={subtitleFormat === 'vtt'}
-                                onChange={(event) =>
-                                  setSubtitleFormat(event.target.checked ? 'vtt' : 'srt')
-                                }
-                                color="primary"
-                              />
-                            }
-                            label={
-                              subtitleFormat === 'vtt'
-                                ? 'WebVTT (.vtt)'
-                                : 'SubRip (.srt)'
-                            }
-                            sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
-                          />
-                        </Stack>
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        size="large"
+                        disabled={isGenerateDisabled}
+                        startIcon={
+                          loading ? <CircularProgress size={18} color="inherit" /> : undefined
+                        }
+                        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' }, minWidth: 200 }}
+                      >
+                        {loading ? 'Generating…' : 'Generate speech'}
+                      </Button>
+                      <Collapse in={Boolean(error)}>
+                        <Alert severity="error" onClose={() => setError('')}>
+                          {error}
+                        </Alert>
                       </Collapse>
                     </Stack>
                   </Stack>
-                </TabPanel>
-
-                <TabPanel current={activeTab} value="enhance">
-                  <Stack spacing={2.5}>
-                    <Stack spacing={0.25}>
-                      <Typography variant="subtitle1">LLM enhancements</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Combine these optional AI helpers with your own endpoint. Credentials stay in
-                        the browser.
-                      </Typography>
-                    </Stack>
-
-                    <EnhancementCard>
-                      <LLMPreprocessing
-                        llmEndpoint={llmEndpoint}
-                        onLLMEndpointChange={setLLMEndpoint}
-                        llmApiKey={llmApiKey}
-                        onLLMApiKeyChange={setLLMApiKey}
-                        requireCredentials={enhancementsActive}
-                      />
-                    </EnhancementCard>
-
-                    <EnhancementOptionCard
-                      title="Optimize text for better reading flow"
-                      description="Cleans numbers, abbreviations, and symbols so speech reads naturally while staying true to the original content."
-                      checked={optimizeForTTS}
-                      onToggle={setOptimizeForTTS}
-                    />
-
-                    <EnhancementOptionCard
-                      title="Fine-tune pronunciation using AI"
-                      description="Adds SSML markup for pauses, emphasis, and pronunciation control."
-                      subtitle="Adds SSML markup"
-                      checked={addSSML}
-                      onToggle={setAddSSML}
-                    />
-                  </Stack>
-                </TabPanel>
-
-                {result && (
-                  <TabPanel current={activeTab} value="result">
-                    <ResultPanel
-                      audioBase64={result.audioBase64}
-                      subtitleContent={result.subtitleContent}
-                      subtitleFormat={result.subtitleFormat}
-                      voice={result.voice}
-                      showSubtitles={subtitlesEnabled}
-                    />
-                  </TabPanel>
-                )}
-
-                <Divider />
-
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1.5}
-                  alignItems={{ xs: 'stretch', sm: 'center' }}
-                  justifyContent="space-between"
-                >
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={mockMode}
-                        onChange={(event) => setMockMode(event.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label="Mock mode"
-                    sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
-                  />
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    size="large"
-                    disabled={isGenerateDisabled}
-                    startIcon={
-                      loading ? <CircularProgress size={18} color="inherit" /> : undefined
-                    }
-                    sx={{ minWidth: 200 }}
-                  >
-                    {loading ? 'Generating…' : 'Generate speech'}
-                  </Button>
-                </Stack>
-
-                <Collapse in={Boolean(error)}>
-                  <Alert severity="error" onClose={() => setError('')}>
-                    {error}
-                  </Alert>
-                </Collapse>
+                </Box>
               </CardContent>
             </Card>
 
-            {!result && (
+            {result ? (
+              <ResultPanel
+                audioBase64={result.audioBase64}
+                subtitleContent={result.subtitleContent}
+                subtitleFormat={result.subtitleFormat}
+                voice={result.voice}
+                showSubtitles={subtitlesEnabled}
+              />
+            ) : (
               <Card
+                className="snap-card"
                 sx={{
                   borderRadius: 3,
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  p: { xs: 4, md: 6 },
-                  textAlign: 'center',
+                  flexDirection: 'column',
                   minHeight: { xs: '80vh', md: '72vh' },
+                  width: { xs: '100%', md: 'min(100%, 960px)' },
+                  mx: 'auto',
+                  textAlign: 'center',
                 }}
               >
-                <Stack spacing={2} alignItems="center">
-                  <Typography variant="h6">Your rendered audio will appear here.</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
-                    Step through the tabs: enter text, audition voices, tweak delivery, optionally
-                    enhance with LLM, then generate to unlock the playback tab.
-                  </Typography>
-                </Stack>
+                <CardContent
+                  className="snap-card-scroll"
+                  sx={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflowY: 'auto',
+                    overscrollBehavior: 'contain',
+                    px: { xs: 3, md: 4 },
+                    py: { xs: 4, md: 5 },
+                  }}
+                >
+                  <Stack spacing={2} alignItems="center">
+                    <Typography variant="h6">Your rendered audio will appear here.</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
+                      Step through the tabs: enter text, audition voices, tweak delivery, optionally
+                      enhance with LLM, then generate to unlock the playback tab.
+                    </Typography>
+                  </Stack>
+                </CardContent>
               </Card>
             )}
           </Stack>
