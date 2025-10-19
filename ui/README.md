@@ -4,11 +4,11 @@ A production-quality, static-hostable single-page web application for the Edge T
 
 ## Features
 
-- 🎨 **Modern, Responsive UI** - Built with React + Tailwind CSS, mobile-first design
+- 🎨 **Modern, Responsive UI** - Built with React + Material UI, mobile-first design
 - 🎤 **Voice Selection** - Prefilled with example voices and demo playback
 - 🎛️ **Prosody Controls** - Rate, pitch, and volume controls with presets
 - 🤖 **Client-Side LLM Preprocessing** - Optional text optimization and SSML generation (your API keys stay in your browser)
-- 📝 **Subtitle Support** - SRT and VTT formats with active cue highlighting
+- 📝 **Interactive Transcript** - Real-time word-level highlighting with click-to-seek functionality
 - 🎵 **Audio Player** - Native HTML5 player with keyboard shortcuts
 - 💾 **Download Options** - Download audio, subtitles, or both as ZIP
 - 🧪 **Mock Mode** - Test the UI offline without the worker
@@ -165,28 +165,30 @@ ui/
 │   │   ├── VoiceSelector.tsx       # Voice selection with demo playback
 │   │   ├── ProsodyControls.tsx     # Rate/pitch/volume controls
 │   │   ├── LLMPreprocessing.tsx    # LLM preprocessing panel
-│   │   └── ResultPanel.tsx         # Audio player + subtitle viewer
+│   │   ├── ResultPanel.tsx         # Audio player + subtitle viewer
+│   │   └── TranscriptPlayer.tsx    # Interactive transcript with word highlighting
 │   ├── lib/
 │   │   ├── workerClient.ts         # Worker API client
 │   │   ├── llmClient.ts            # LLM API client with validation
 │   │   ├── subtitle.ts             # Subtitle parser and renderer
 │   │   └── zip.ts                  # ZIP download utility
 │   ├── constants.ts                # Configuration and system prompts
+│   ├── theme.ts                    # Material UI theme configuration
 │   ├── App.tsx                     # Main application component
 │   ├── main.tsx                    # React entry point
-│   └── index.css                   # Tailwind styles
+│   └── index.css                   # Global styles
 ├── index.html                      # HTML entry point
 ├── package.json                    # Dependencies and scripts
 ├── tsconfig.json                   # TypeScript configuration
 ├── vite.config.ts                  # Vite configuration
-├── tailwind.config.js              # Tailwind configuration
 └── README.md                       # This file
 ```
 
 ### Key Libraries
 
 - **React 18** - UI framework
-- **Tailwind CSS** - Utility-first CSS framework
+- **Material UI (MUI)** - React component library with dark theme
+- **Emotion** - CSS-in-JS styling solution (MUI dependency)
 - **Vite** - Build tool and dev server
 - **srt-parser-2** - SRT subtitle parsing
 - **JSZip** - ZIP file generation
@@ -205,24 +207,43 @@ ui/
    - UI uses canned payload (see `src/constants.ts`)
    - All UI features work without worker or LLM
 
-## Subtitle Rendering
+## Interactive Transcript
 
-### Current Implementation
+### Features
 
-- Parses SRT/VTT into cues using `srt-parser-2`
-- Highlights active cue (line-level) during playback
-- Auto-scrolls to keep active cue visible
-- Uses `timeupdate` event throttling for performance
+The `TranscriptPlayer` component provides a sophisticated transcript viewing experience:
 
-### Per-Word Highlighting (TODO)
+- **Real-time word highlighting** - The currently spoken word is visually highlighted as audio plays
+- **Click-to-seek** - Click any word to jump to that moment in the audio
+- **Smooth auto-scrolling** - Active words automatically scroll into view
+- **Responsive design** - Optimized for both mobile and desktop
+- **Dark theme integration** - Seamlessly matches the app's dark theme
 
-Per-word highlighting is not yet implemented. To add it:
+### Implementation Details
 
-1. Worker must provide word-level timestamps in the response
-2. Update `subtitle.ts` to use actual word timings instead of approximations
-3. Update `ResultPanel.tsx` to highlight individual words within cues
+The transcript player uses the existing subtitle parsing infrastructure:
 
-Current implementation includes an approximation algorithm (`approximateWordTimings`) that divides cue duration evenly among words. This can be used as a fallback if the worker doesn't provide word-level data.
+1. **Subtitle Parsing**: Parses SRT/VTT files into cues using `srt-parser-2`
+2. **Word Timing Approximation**: Uses `approximateWordTimings()` to split each cue into individual words with estimated timestamps
+3. **Real-time Tracking**: Listens to the audio `timeupdate` event to track current playback position
+4. **Visual Highlighting**: Applies MUI theme colors to highlight the active word
+5. **Interactive Seeking**: Handles click events on words to update audio `currentTime`
+
+### Word-Level Timestamps
+
+**Current**: The component uses an approximation algorithm that divides each subtitle cue's duration evenly among its words. This provides a reasonable approximation for real-time highlighting.
+
+**Future Enhancement**: When the worker provides actual word-level timestamps, update the `parseSubtitles()` function in `subtitle.ts` to use the precise timings instead of approximations. The UI component is already designed to handle this data format with no changes needed.
+
+### Component API
+
+```tsx
+<TranscriptPlayer
+  audioRef={audioRef}        // Ref to the HTML audio element
+  cues={cues}                // Parsed subtitle cues
+  currentTime={currentTime}  // Current playback time in seconds
+/>
+```
 
 ## Accessibility
 
