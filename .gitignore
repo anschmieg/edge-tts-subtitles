@@ -168,3 +168,8 @@ dist
 
 # temp files
 tmp_*
+
+# Workspace settings
+.vscode/
+.idea/
+.project/
