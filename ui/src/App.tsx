@@ -311,7 +311,14 @@ function App() {
     loading || !voice || !text.trim() || llmRequiresConfig;
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       <AppBar
         position="static"
         color="transparent"
@@ -347,27 +354,43 @@ function App() {
           minHeight: 0,
           py: { xs: 3, md: 4 },
           px: { xs: 1.5, md: 3 },
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
         <Container
           maxWidth="md"
           sx={{
-            height: '100%',
+            flex: 1,
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
             px: { xs: 0, md: 1 },
+            overflow: 'hidden',
           }}
         >
           <Stack
+            data-testid="snap-stack"
             spacing={{ xs: 3, md: 4 }}
             sx={{
-              flexGrow: 1,
-              overflowY: 'auto',
+              flex: 1,
+              minHeight: 0,
+              maxHeight: '100%',
+              overflowY: 'scroll',
+              overscrollBehaviorY: 'contain',
+              WebkitOverflowScrolling: 'touch',
               scrollSnapType: 'y mandatory',
+              scrollSnapStop: 'always',
+              scrollPaddingTop: (theme) => theme.spacing(3),
               pb: 4,
               pr: { xs: 1, md: 2 },
               pl: { xs: 1, md: 2 },
+              '& > *': {
+                scrollSnapAlign: 'start',
+                scrollSnapStop: 'always',
+                flexShrink: 0,
+              },
             }}
           >
             <Card
@@ -380,12 +403,10 @@ function App() {
                 color: 'primary.contrastText',
                 px: { xs: 3, md: 6 },
                 py: { xs: 4, md: 6 },
-                minHeight: { xs: 'calc(100vh - 200px)', md: 'calc(100vh - 260px)' },
-                scrollSnapAlign: 'start',
-                scrollSnapStop: 'always',
+                minHeight: { xs: '80vh', md: '72vh' },
               }}
             >
-              <CardContent sx={{ px: 0 }}>
+              <CardContent sx={{ px: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                 <Stack spacing={3}>
                   <Chip
                     icon={<AutoAwesomeRoundedIcon />}
@@ -416,12 +437,10 @@ function App() {
               onSubmit={handleSubmit}
               sx={{
                 borderRadius: 3,
-                minHeight: { xs: 'calc(100vh - 200px)', md: 'calc(100vh - 260px)' },
-                scrollSnapAlign: 'start',
-                scrollSnapStop: 'always',
+                minHeight: { xs: '80vh', md: '72vh' },
               }}
             >
-              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minHeight: 0 }}>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                   <Chip
                     label={
@@ -689,9 +708,7 @@ function App() {
                   justifyContent: 'center',
                   p: { xs: 4, md: 6 },
                   textAlign: 'center',
-                  minHeight: { xs: 'calc(100vh - 200px)', md: 'calc(100vh - 260px)' },
-                  scrollSnapAlign: 'start',
-                  scrollSnapStop: 'always',
+                  minHeight: { xs: '80vh', md: '72vh' },
                 }}
               >
                 <Stack spacing={2} alignItems="center">
