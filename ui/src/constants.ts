@@ -144,44 +144,6 @@ export async function resolveWorkerBaseUrl(): Promise<string> {
 export const WORKER_BASE_URL = HOSTED_WORKER_FALLBACK ?? '';
 export const LOCAL_WORKER_BASE_URLS = [...LOCAL_WRANGLER_URLS];
 
-// Example voices with demo samples
-/**
- * Lightweight voice descriptor used by the UI.
- */
-export interface Voice {
-  id: string;
-  name: string;
-  language?: string;
-  demoText?: string;
-}
-
-export const EXAMPLE_VOICES: Voice[] = [
-  {
-    id: 'en-US-EmmaMultilingualNeural',
-    name: 'Emma (US English)',
-    language: 'en-US',
-    demoText: 'Hello, I am Emma. I can speak in a natural and friendly voice.',
-  },
-  {
-    id: 'en-US-AndrewMultilingualNeural',
-    name: 'Andrew (US English)',
-    language: 'en-US',
-    demoText: 'Hello, I am Andrew. I can speak clearly and professionally.',
-  },
-  {
-    id: 'en-GB-SoniaNeural',
-    name: 'Sonia (British English)',
-    language: 'en-GB',
-    demoText: 'Hello, I am Sonia. I speak with a British accent.',
-  },
-  {
-    id: 'es-ES-ElviraNeural',
-    name: 'Elvira (Spanish)',
-    language: 'es-ES',
-    demoText: 'Hola, soy Elvira. Hablo español con claridad.',
-  },
-];
-
 // LLM System Prompts (exact copy from requirements)
 
 // Optimize-for-TTS system prompt

@@ -1,5 +1,15 @@
 import { MOCK_PAYLOAD, resolveWorkerBaseUrl } from '../constants';
 
+export interface WorkerVoice {
+  shortName: string;
+  friendlyName: string;
+  locale: string;
+  language: string;
+  gender: 'Female' | 'Male';
+  isMultilingual: boolean;
+  displayName: string;
+}
+
 export interface TTSRequest {
   input: string;
   voice: string;
@@ -99,4 +109,38 @@ export function downloadSubtitle(content: string, format: 'srt' | 'vtt', filenam
   const defaultFilename = filename || `subtitles.${format}`;
   const blob = new Blob([content], { type: 'text/plain' });
   downloadBlob(blob, defaultFilename);
+}
+
+let voicesPromise: Promise<WorkerVoice[]> | null = null;
+
+async function fetchVoicesOnce(): Promise<WorkerVoice[]> {
+  const baseUrl = await resolveWorkerBaseUrl();
+  const response = await fetch(`${baseUrl}/v1/voices`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to load voices: ${response.status} - ${errorText}`);
+  }
+
+  const payload = await response.json();
+  if (!payload || !Array.isArray(payload.voices)) {
+    throw new Error('Unexpected voice payload');
+  }
+
+  return payload.voices as WorkerVoice[];
+}
+
+export async function fetchVoices(): Promise<WorkerVoice[]> {
+  if (!voicesPromise) {
+    voicesPromise = fetchVoicesOnce().catch((error) => {
+      voicesPromise = null;
+      throw error;
+    });
+  }
+  return voicesPromise;
 }

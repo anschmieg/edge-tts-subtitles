@@ -1,13 +1,29 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  Stack,
+  Typography,
+} from '@mui/material';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import SubtitlesRoundedIcon from '@mui/icons-material/SubtitlesRounded';
+import ArchiveRoundedIcon from '@mui/icons-material/ArchiveRounded';
+import HeadphonesRoundedIcon from '@mui/icons-material/HeadphonesRounded';
 import { parseSubtitles, findActiveCue, type SubtitleCue } from '../lib/subtitle';
-import { downloadAudio, downloadSubtitle, createAudioURL } from '../lib/workerClient';
+import { downloadAudio, downloadSubtitle } from '../lib/workerClient';
 import { downloadZip } from '../lib/zip';
+import { createAudioURL } from '../lib/workerClient';
 
 interface ResultPanelProps {
   audioBase64: string;
   subtitleContent: string;
   subtitleFormat: 'srt' | 'vtt';
   voice: string;
+  showSubtitles: boolean;
 }
 
 export function ResultPanel({
@@ -15,6 +31,7 @@ export function ResultPanel({
   subtitleContent,
   subtitleFormat,
   voice,
+  showSubtitles,
 }: ResultPanelProps) {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [cues, setCues] = useState<SubtitleCue[]>([]);
@@ -24,19 +41,20 @@ export function ResultPanel({
   const activeCueRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Create audio URL from base64
     const url = createAudioURL(audioBase64);
     setAudioUrl(url);
 
-    // Parse subtitles
-    const parsedCues = parseSubtitles(subtitleContent, subtitleFormat);
-    setCues(parsedCues);
+    if (showSubtitles && subtitleContent) {
+      const parsedCues = parseSubtitles(subtitleContent, subtitleFormat);
+      setCues(parsedCues);
+    } else {
+      setCues([]);
+    }
 
-    // Clean up on unmount
     return () => {
       URL.revokeObjectURL(url);
     };
-  }, [audioBase64, subtitleContent, subtitleFormat]);
+  }, [audioBase64, subtitleContent, subtitleFormat, showSubtitles]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -44,8 +62,6 @@ export function ResultPanel({
 
     const handleTimeUpdate = () => {
       const time = audio.currentTime;
-
-      // Find active cue
       const activeCue = findActiveCue(cues, time);
       setActiveCueId(activeCue?.id || null);
     };
@@ -63,7 +79,6 @@ export function ResultPanel({
     };
   }, [cues]);
 
-  // Auto-scroll to active cue
   useEffect(() => {
     if (activeCueRef.current) {
       activeCueRef.current.scrollIntoView({
@@ -73,30 +88,34 @@ export function ResultPanel({
     }
   }, [activeCueId]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (e.code === 'Space') {
-      e.preventDefault();
+    if (event.code === 'Space') {
+      event.preventDefault();
       if (audio.paused) {
         audio.play();
       } else {
         audio.pause();
       }
-    } else if (e.code === 'ArrowLeft') {
-      e.preventDefault();
+    } else if (event.code === 'ArrowLeft') {
+      event.preventDefault();
       audio.currentTime = Math.max(0, audio.currentTime - 5);
-    } else if (e.code === 'ArrowRight') {
-      e.preventDefault();
+    } else if (event.code === 'ArrowRight') {
+      event.preventDefault();
       audio.currentTime = Math.min(audio.duration, audio.currentTime + 5);
     }
   };
 
   const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    const mins = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, '0');
+    const secs = Math.floor(seconds % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${mins}:${secs}`;
   };
 
   const handleDownloadZip = async () => {
@@ -109,80 +128,164 @@ export function ResultPanel({
   };
 
   return (
-    <div className="space-y-4" onKeyDown={handleKeyDown} tabIndex={0}>
-      <h2 className="text-xl font-semibold text-gray-800">Result</h2>
-
-      {/* Audio Player */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          controls
-          className="w-full mb-3"
-        />
-
-        <div className="text-sm text-gray-600 space-y-1">
-          <div>
-            <span className="font-medium">Voice:</span> {voice}
-          </div>
-          <div>
-            <span className="font-medium">Duration:</span> {formatTime(duration)}
-          </div>
-          <div className="text-xs text-gray-500 mt-2">
-            Keyboard shortcuts: Space = play/pause, ← → = seek ±5s
-          </div>
-        </div>
-      </div>
-
-      {/* Download Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => downloadAudio(audioBase64)}
-          className="btn-secondary flex-1 sm:flex-none"
+    <Card
+      sx={{
+        borderRadius: 3,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          justifyContent="space-between"
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
         >
-          Download MP3
-        </button>
-        <button
-          onClick={() => downloadSubtitle(subtitleContent, subtitleFormat)}
-          className="btn-secondary flex-1 sm:flex-none"
-        >
-          Download {subtitleFormat.toUpperCase()}
-        </button>
-        <button
-          onClick={handleDownloadZip}
-          className="btn-primary flex-1 sm:flex-none"
-        >
-          Download ZIP
-        </button>
-      </div>
+          <Stack spacing={0.5}>
+            <Typography variant="h5">Rendered output</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Download or sync with your workflow. Keyboard shortcuts are enabled while focused.
+            </Typography>
+          </Stack>
+          <Chip
+            label={voice}
+            icon={<HeadphonesRoundedIcon sx={{ fontSize: 18 }} />}
+            variant="outlined"
+            sx={{ maxWidth: '100%' }}
+          />
+        </Stack>
 
-      {/* Subtitles */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Subtitles</h3>
-        <div className="max-h-96 overflow-y-auto space-y-2">
-          {cues.map((cue) => (
-            <div
-              key={cue.id}
-              ref={cue.id === activeCueId ? activeCueRef : null}
-              className={`subtitle-cue ${
-                cue.id === activeCueId ? 'subtitle-cue-active' : ''
-              }`}
+        <Box
+          sx={{
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            borderRadius: 3,
+            border: '1px solid rgba(140,130,255,0.12)',
+            p: 2.5,
+          }}
+        >
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            controls
+            style={{ width: '100%' }}
+          />
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            sx={{ mt: 2 }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              Duration:&nbsp;<strong>{formatTime(duration || 0)}</strong>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Shortcuts: Space to play/pause, ←/→ seek ±5s
+            </Typography>
+          </Stack>
+        </Box>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadRoundedIcon />}
+            onClick={() => downloadAudio(audioBase64)}
+            fullWidth
+          >
+            Download MP3
+          </Button>
+          {showSubtitles && (
+            <Button
+              variant="outlined"
+              startIcon={<SubtitlesRoundedIcon />}
+              onClick={() => downloadSubtitle(subtitleContent, subtitleFormat)}
+              fullWidth
             >
-              <div className="text-xs text-gray-500 mb-1">
-                {formatTime(cue.startTime / 1000)} → {formatTime(cue.endTime / 1000)}
-              </div>
-              <div className="text-sm text-gray-800">{cue.text}</div>
-            </div>
-          ))}
-        </div>
-        
-        {/* TODO: Per-word highlighting */}
-        <div className="mt-3 text-xs text-gray-500 italic">
-          Note: Per-word highlighting is not yet implemented. The worker would need to provide
-          word-level timestamps for precise per-word synchronization. Current implementation
-          highlights the active subtitle cue.
-        </div>
-      </div>
-    </div>
+              {`Download ${subtitleFormat.toUpperCase()}`}
+            </Button>
+          )}
+          {showSubtitles && (
+            <Button
+              variant="contained"
+              startIcon={<ArchiveRoundedIcon />}
+              onClick={handleDownloadZip}
+              fullWidth
+            >
+              Download ZIP
+            </Button>
+          )}
+        </Stack>
+
+        <Divider />
+
+        {showSubtitles ? (
+          <Stack spacing={2} flexGrow={1}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              justifyContent="space-between"
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
+            >
+              <Typography variant="h6">Subtitles</Typography>
+              <Chip label={subtitleFormat.toUpperCase()} variant="outlined" />
+            </Stack>
+
+            <Box
+              tabIndex={0}
+              onKeyDown={handleKeyDown}
+              sx={{
+                maxHeight: { xs: 280, md: 320 },
+                overflowY: 'auto',
+                borderRadius: 2.5,
+                backgroundColor: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(140,130,255,0.08)',
+                px: 2,
+                py: 2,
+                outline: 'none',
+              }}
+            >
+              {cues.map((cue) => {
+                const isActive = cue.id === activeCueId;
+                return (
+                  <Box
+                    key={cue.id}
+                    ref={isActive ? activeCueRef : null}
+                    sx={{
+                      mb: 1.5,
+                      px: 1.5,
+                      py: 1.25,
+                      borderRadius: 2,
+                      border: '1px solid transparent',
+                      backgroundColor: isActive ? 'rgba(140,130,255,0.12)' : 'transparent',
+                      borderColor: isActive ? 'rgba(140,130,255,0.32)' : 'transparent',
+                      transition: 'background-color 0.2s ease, border-color 0.2s ease',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {formatTime(cue.startTime / 1000)} → {formatTime(cue.endTime / 1000)}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      {cue.text}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+
+            <Typography variant="caption" color="text.secondary">
+              Word-level highlighting will arrive when the worker exposes granular timestamps. For
+              now, the active caption cue stays centered as audio plays.
+            </Typography>
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Subtitles were turned off for this render. Re-enable the option before generating audio
+            to receive caption files.
+          </Typography>
+        )}
+      </CardContent>
+    </Card>
   );
 }

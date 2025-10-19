@@ -1,34 +1,29 @@
-import { useState } from 'react';
-import { optimizeTextForTTS, addSSMLMarkup, validateLLMEndpoint } from '../lib/llmClient';
+import { useMemo, useState } from 'react';
+import { Alert, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
+import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded';
+import ScienceRoundedIcon from '@mui/icons-material/ScienceRounded';
+import { validateLLMEndpoint } from '../lib/llmClient';
 
 interface LLMPreprocessingProps {
-  enabled: boolean;
-  onEnabledChange: (enabled: boolean) => void;
   llmEndpoint: string;
   onLLMEndpointChange: (endpoint: string) => void;
   llmApiKey: string;
   onLLMApiKeyChange: (key: string) => void;
-  optimizeForTTS: boolean;
-  onOptimizeForTTSChange: (optimize: boolean) => void;
-  addSSML: boolean;
-  onAddSSMLChange: (addSSML: boolean) => void;
+  requireCredentials?: boolean;
 }
 
 export function LLMPreprocessing({
-  enabled,
-  onEnabledChange,
   llmEndpoint,
   onLLMEndpointChange,
   llmApiKey,
   onLLMApiKeyChange,
-  optimizeForTTS,
-  onOptimizeForTTSChange,
-  addSSML,
-  onAddSSMLChange,
+  requireCredentials = false,
 }: LLMPreprocessingProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string>('');
   const [testError, setTestError] = useState<string>('');
+
+  const modelsUrl = useMemo(() => buildModelsUrl(llmEndpoint), [llmEndpoint]);
 
   const handleTestLLM = async () => {
     setTesting(true);
@@ -43,30 +38,36 @@ export function LLMPreprocessing({
     }
 
     if (!llmApiKey) {
-      setTestError('API key is required');
+      setTestError('API key is required for the quick check.');
       setTesting(false);
       return;
     }
 
-    const testText = 'Hello world! Dr. Smith @ 123 Main St. will meet you at 3:30 PM.';
-    
+    if (!modelsUrl) {
+      setTestError('Unable to derive a models endpoint from the provided URL.');
+      setTesting(false);
+      return;
+    }
+
     try {
-      const config = {
-        endpoint: llmEndpoint,
-        apiKey: llmApiKey,
-      };
+      const response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${llmApiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      let result = testText;
-
-      if (optimizeForTTS) {
-        result = await optimizeTextForTTS(config, testText);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`${response.status} ${response.statusText}: ${text || 'No response body'}`);
       }
 
-      if (addSSML) {
-        result = await addSSMLMarkup(config, addSSML && optimizeForTTS ? result : testText);
-      }
-
-      setTestResult(result);
+      const data = await response.json();
+      const modelCount = Array.isArray(data?.data) ? data.data.length : undefined;
+      setTestResult(
+        `Connection succeeded. ${typeof modelCount === 'number' ? `${modelCount} models reported.` : 'The endpoint responded without errors.'}`
+      );
     } catch (error) {
       setTestError(error instanceof Error ? error.message : 'Test failed');
     } finally {
@@ -75,98 +76,94 @@ export function LLMPreprocessing({
   };
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-      <div className="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          id="enableLLM"
-          checked={enabled}
-          onChange={(e) => onEnabledChange(e.target.checked)}
-          className="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent cursor-pointer"
-        />
-        <label htmlFor="enableLLM" className="text-sm font-medium text-gray-700 cursor-pointer">
-          Enable client-side LLM preprocessing (advanced)
-        </label>
-      </div>
+    <Stack spacing={2.25}>
+      <Typography variant="subtitle2" color="text.secondary">
+        Base settings
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Required when any enhancement is enabled. The key never leaves your browser—it's only used
+        for client-side preprocessing before audio generation.
+      </Typography>
 
-      {enabled && (
-        <div className="space-y-3 mt-3 pl-6">
-          <div>
-            <label className="label">LLM Endpoint</label>
-            <input
-              type="text"
-              value={llmEndpoint}
-              onChange={(e) => onLLMEndpointChange(e.target.value)}
-              placeholder="https://api.openai.com/v1/chat/completions"
-              className="input-text"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Must be an HTTPS endpoint. Your API key stays in your browser.
-            </p>
-          </div>
+      <TextField
+        label="LLM endpoint"
+        value={llmEndpoint}
+        onChange={(event) => onLLMEndpointChange(event.target.value)}
+        placeholder="https://api.openai.com/v1/chat/completions"
+        helperText="HTTPS only. For Azure OpenAI, include the deployment URL and api-version parameter."
+      />
 
-          <div>
-            <label className="label">LLM API Key</label>
-            <input
-              type="password"
-              value={llmApiKey}
-              onChange={(e) => onLLMApiKeyChange(e.target.value)}
-              placeholder="sk-..."
-              className="input-text"
-            />
-          </div>
+      <TextField
+        label="API key"
+        type="password"
+        value={llmApiKey}
+        onChange={(event) => onLLMApiKeyChange(event.target.value)}
+        placeholder="sk-..."
+      />
 
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="optimizeForTTS"
-                checked={optimizeForTTS}
-                onChange={(e) => onOptimizeForTTSChange(e.target.checked)}
-                className="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent cursor-pointer"
-              />
-              <label htmlFor="optimizeForTTS" className="text-sm text-gray-700 cursor-pointer">
-                Optimize text for TTS
-              </label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="addSSML"
-                checked={addSSML}
-                onChange={(e) => onAddSSMLChange(e.target.checked)}
-                className="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent cursor-pointer"
-              />
-              <label htmlFor="addSSML" className="text-sm text-gray-700 cursor-pointer">
-                Add SSML markup
-              </label>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleTestLLM}
-            disabled={testing || !llmEndpoint || !llmApiKey}
-            className="btn-secondary w-full"
-          >
-            {testing ? 'Testing...' : 'Test LLM'}
-          </button>
-
-          {testResult && (
-            <div className="bg-green-50 border border-green-200 rounded p-3">
-              <p className="text-xs font-medium text-green-800 mb-1">Test Result:</p>
-              <pre className="text-xs text-green-700 whitespace-pre-wrap">{testResult}</pre>
-            </div>
-          )}
-
-          {testError && (
-            <div className="bg-red-50 border border-red-200 rounded p-3">
-              <p className="text-xs font-medium text-red-800">Error: {testError}</p>
-            </div>
-          )}
-        </div>
+      {requireCredentials && (
+        <Alert severity="warning" sx={{ borderRadius: 2 }}>
+          Enter both endpoint and API key to use these enhancements.
+        </Alert>
       )}
-    </div>
+
+      <Button
+        variant="outlined"
+        onClick={handleTestLLM}
+        startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <ScienceRoundedIcon />}
+        disabled={testing || !llmEndpoint || !llmApiKey}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+      >
+        {testing ? 'Checking…' : 'Run quick test'}
+      </Button>
+
+      {modelsUrl && (
+        <Typography variant="caption" color="text.secondary">
+          Checking connectivity by calling <code>{modelsUrl}</code>
+        </Typography>
+      )}
+
+      {testResult && (
+        <Alert
+          severity="success"
+          icon={<AutoFixHighRoundedIcon fontSize="small" />}
+          sx={{ whiteSpace: 'pre-wrap' }}
+          onClose={() => setTestResult('')}
+        >
+          {testResult}
+        </Alert>
+      )}
+
+      {testError && (
+        <Alert severity="error" onClose={() => setTestError('')}>
+          {testError}
+        </Alert>
+      )}
+    </Stack>
   );
+}
+
+function buildModelsUrl(endpoint: string): string | null {
+  try {
+    const url = new URL(endpoint);
+    const apiVersion = url.searchParams.get('api-version');
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+
+    if (pathSegments.includes('openai') && pathSegments.includes('deployments')) {
+      // Likely Azure OpenAI endpoint
+      url.pathname = '/openai/models';
+      if (apiVersion) {
+        url.search = `api-version=${apiVersion}`;
+      } else {
+        url.search = '';
+      }
+    } else {
+      url.pathname = '/v1/models';
+      url.search = '';
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
