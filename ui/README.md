@@ -4,7 +4,7 @@ A production-quality, static-hostable single-page web application for the Edge T
 
 ## Features
 
-- 🎨 **Modern, Responsive UI** - Built with React + Material UI, mobile-first design
+- 🎨 **Modern, Responsive UI** - Built with React + Material UI + Tailwind CSS, mobile-first design
 - 🎤 **Voice Selection** - Prefilled with example voices and demo playback
 - 🎛️ **Prosody Controls** - Rate, pitch, and volume controls with presets
 - 🤖 **Client-Side LLM Preprocessing** - Optional text optimization and SSML generation (your API keys stay in your browser)
@@ -176,11 +176,12 @@ ui/
 │   ├── theme.ts                    # Material UI theme configuration
 │   ├── App.tsx                     # Main application component
 │   ├── main.tsx                    # React entry point
-│   └── index.css                   # Global styles
+│   └── index.css                   # Tailwind styles
 ├── index.html                      # HTML entry point
 ├── package.json                    # Dependencies and scripts
 ├── tsconfig.json                   # TypeScript configuration
 ├── vite.config.ts                  # Vite configuration
+├── tailwind.config.js              # Tailwind configuration
 └── README.md                       # This file
 ```
 
@@ -188,6 +189,7 @@ ui/
 
 - **React 18** - UI framework
 - **Material UI (MUI)** - React component library with dark theme
+- **Tailwind CSS** - Utility-first CSS framework for custom styling
 - **Emotion** - CSS-in-JS styling solution (MUI dependency)
 - **Vite** - Build tool and dev server
 - **srt-parser-2** - SRT subtitle parsing
