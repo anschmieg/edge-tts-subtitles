@@ -1,4 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from 'react';
 import {
   Alert,
   AppBar,
@@ -16,6 +26,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Skeleton,
   Stack,
   Switch,
   Tab,
@@ -29,10 +40,6 @@ import {
 import type { SelectChangeEvent } from '@mui/material/Select';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import LaunchRoundedIcon from '@mui/icons-material/LaunchRounded';
-import { VoiceSelector } from './components/VoiceSelector';
-import { ProsodyControls } from './components/ProsodyControls';
-import { LLMPreprocessing } from './components/LLMPreprocessing';
-import { ResultPanel } from './components/ResultPanel';
 import {
   fetchVoices,
   generateSpeechWithSubtitles,
@@ -40,11 +47,26 @@ import {
   type WorkerVoice,
 } from './lib/workerClient';
 import { formatSelectedVoiceLabel } from './lib/voiceDisplay';
+import { menuPaperSx } from './theme';
 
 const DEFAULT_VOICE_ID = 'en-US-EmmaMultilingualNeural';
 const DEFAULT_RATE = 100;
 const DEFAULT_PITCH_STEPS = 0;
 const DEFAULT_VOLUME = 0;
+const CARD_MAX_WIDTH = 880;
+
+const VoiceSelector = lazy(() =>
+  import('./components/VoiceSelector').then((module) => ({ default: module.VoiceSelector }))
+);
+const ProsodyControls = lazy(() =>
+  import('./components/ProsodyControls').then((module) => ({ default: module.ProsodyControls }))
+);
+const LLMPreprocessing = lazy(() =>
+  import('./components/LLMPreprocessing').then((module) => ({ default: module.LLMPreprocessing }))
+);
+const ResultPanel = lazy(() =>
+  import('./components/ResultPanel').then((module) => ({ default: module.ResultPanel }))
+);
 
 type TabValue = 'script' | 'voice' | 'delivery' | 'enhance' | 'result';
 type PitchUnit = 'percent' | 'hz' | 'semitone';
@@ -107,7 +129,6 @@ function App() {
   const [llmApiKey, setLLMApiKey] = useState('');
   const [optimizeForTTS, setOptimizeForTTS] = useState(false);
   const [addSSML, setAddSSML] = useState(false);
-  const [mockMode, setMockMode] = useState(false);
   const [result, setResult] = useState<{
     audioBase64: string;
     subtitleContent: string;
@@ -129,38 +150,39 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    if (activeTab !== 'voice' || voicesFetched || voicesLoading) {
+  const loadVoices = useCallback(async () => {
+    if (voicesFetched || voicesLoading) {
       return;
     }
-
-    let cancelled = false;
     setVoicesLoading(true);
     setVoicesError('');
-    fetchVoices()
-      .then((data) => {
-        if (cancelled) return;
-        setVoices(data);
-        setVoicesFetched(true);
-        if (!voiceManuallySet && data.length && !voice) {
-          setVoice(data[0].shortName);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load voices', err);
-        if (cancelled) return;
-        setVoicesError(err instanceof Error ? err.message : 'Failed to load voice list');
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setVoicesLoading(false);
-        }
-      });
+    try {
+      const data = await fetchVoices();
+      setVoices(data);
+      setVoicesFetched(true);
+      if (!voiceManuallySet && data.length && !voice) {
+        setVoice(data[0].shortName);
+      }
+    } catch (err) {
+      console.error('Failed to load voices', err);
+      setVoicesError(err instanceof Error ? err.message : 'Failed to load voice list');
+    } finally {
+      setVoicesLoading(false);
+    }
+  }, [voicesFetched, voicesLoading, voiceManuallySet, voice]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, voicesFetched, voicesLoading, voiceManuallySet, voice]);
+  useEffect(() => {
+    if (activeTab === 'voice') {
+      loadVoices();
+    }
+  }, [activeTab, loadVoices]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadVoices();
+    }, 550);
+    return () => window.clearTimeout(timer);
+  }, [loadVoices]);
 
   useEffect(() => {
     if (voiceManuallySet) return;
@@ -190,31 +212,40 @@ function App() {
       return;
     }
 
-    const cards = Array.from(
-      container.querySelectorAll<HTMLElement>(':scope > .snap-card')
-    );
+    const cards = Array.from(container.querySelectorAll<HTMLElement>(':scope > .snap-card'));
     if (!cards.length) {
       return;
     }
 
-    cards.forEach((card) => card.classList.remove('snap-card-active'));
+    const thresholds = Array.from({ length: 21 }, (_, index) => index / 20);
+
+    cards.forEach((card, index) => {
+      card.style.setProperty('--snap-progress', index === 0 ? '1' : '0');
+    });
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          entry.target.classList.toggle('snap-card-active', entry.isIntersecting);
+          const ratio = entry.intersectionRatio;
+          const eased = Math.max(0, Math.min(1, (ratio - 0.25) / 0.75));
+          const target = entry.target;
+          if (target instanceof HTMLElement) {
+            target.setAttribute('data-snap-progress', eased.toFixed(3));
+            target.style.setProperty('--snap-progress', eased.toFixed(3));
+          }
         });
       },
-      { root: container, threshold: 0.7 }
+      { root: container, threshold: thresholds }
     );
 
     cards.forEach((card) => observer.observe(card));
-    if (cards[0]) {
-      cards[0].classList.add('snap-card-active');
-    }
 
     return () => {
-      cards.forEach((card) => observer.unobserve(card));
+      cards.forEach((card) => {
+        observer.unobserve(card);
+        card.removeAttribute('data-snap-progress');
+        card.style.removeProperty('--snap-progress');
+      });
       observer.disconnect();
     };
   }, [result, activeTab, subtitlesEnabled, subtitleFormat]);
@@ -227,7 +258,12 @@ function App() {
       container.querySelectorAll<HTMLElement>('.snap-card-scroll')
     );
     const wheelHandlers: Array<{ el: HTMLElement; handler: (event: WheelEvent) => void }> = [];
-    const touchHandlers: Array<{ el: HTMLElement; start: (event: TouchEvent) => void; move: (event: TouchEvent) => void }> = [];
+    const touchHandlers: Array<{
+      el: HTMLElement;
+      start: (event: TouchEvent) => void;
+      move: (event: TouchEvent) => void;
+      end: (event: TouchEvent) => void;
+    }> = [];
     const touchStartMap = new WeakMap<HTMLElement, number>();
 
     const disableSnapTemporarily = () => {
@@ -273,19 +309,26 @@ function App() {
           disableSnapTemporarily();
         }
       };
+      const onTouchEnd = () => {
+        disableSnapTemporarily();
+      };
 
       el.addEventListener('wheel', onWheel, { passive: true });
       el.addEventListener('touchstart', onTouchStart, { passive: true });
       el.addEventListener('touchmove', onTouchMove, { passive: true });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+      el.addEventListener('touchcancel', onTouchEnd, { passive: true });
       wheelHandlers.push({ el, handler: onWheel });
-      touchHandlers.push({ el, start: onTouchStart, move: onTouchMove });
+      touchHandlers.push({ el, start: onTouchStart, move: onTouchMove, end: onTouchEnd });
     });
 
     return () => {
       wheelHandlers.forEach(({ el, handler }) => el.removeEventListener('wheel', handler));
-      touchHandlers.forEach(({ el, start, move }) => {
+      touchHandlers.forEach(({ el, start, move, end }) => {
         el.removeEventListener('touchstart', start);
         el.removeEventListener('touchmove', move);
+        el.removeEventListener('touchend', end);
+        el.removeEventListener('touchcancel', end);
       });
       if (snapDisableTimeout.current !== null) {
         window.clearTimeout(snapDisableTimeout.current);
@@ -416,7 +459,7 @@ function App() {
         }
       }
 
-      const response = await generateSpeechWithSubtitles(request, mockMode);
+      const response = await generateSpeechWithSubtitles(request, false);
 
       setResult({
         audioBase64: response.audio_content_base64,
@@ -526,14 +569,17 @@ function App() {
               scrollSnapStop: 'always',
               scrollPaddingTop: (theme) => theme.spacing(3),
               pb: 4,
-              pr: { xs: 1, md: 2 },
-              pl: { xs: 1, md: 2 },
-               scrollbarWidth: 'none',
-               '&::-webkit-scrollbar': { display: 'none' },
+              px: { xs: 1.5, md: 0 },
+              alignItems: 'center',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
               '& > *': {
                 scrollSnapAlign: 'start',
                 scrollSnapStop: 'always',
                 flexShrink: 0,
+              },
+              '& > .MuiDivider-root': {
+                alignSelf: 'stretch',
               },
             }}
           >
@@ -549,7 +595,8 @@ function App() {
                 px: { xs: 3, md: 6 },
                 py: { xs: 4, md: 6 },
                 minHeight: { xs: '80vh', md: '72vh' },
-                width: { xs: '100%', md: 'min(100%, 960px)' },
+                width: '100%',
+                maxWidth: CARD_MAX_WIDTH,
                 mx: 'auto',
               }}
             >
@@ -586,7 +633,8 @@ function App() {
               sx={{
                 borderRadius: 3,
                 minHeight: { xs: '80vh', md: '72vh' },
-                width: { xs: '100%', md: 'min(100%, 960px)' },
+                width: '100%',
+                maxWidth: CARD_MAX_WIDTH,
                 mx: 'auto',
               }}
             >
@@ -605,9 +653,9 @@ function App() {
                   sx={{
                     overflowY: 'auto',
                     overscrollBehavior: 'contain',
-                    pr: { xs: 1, md: 2 },
+                    px: { xs: 1.5, md: 2 },
                     pb: 4,
-                    mr: { xs: -1, md: -2 },
+                    mx: { xs: -1.5, md: -2 },
                   }}
                 >
                   <Stack spacing={3}>
@@ -624,6 +672,8 @@ function App() {
                               ? 'Loading voices…'
                               : voicesError
                               ? 'Voice list unavailable'
+                              : voice
+                              ? voice
                               : 'Select a voice'
                           }
                           variant="outlined"
@@ -649,31 +699,43 @@ function App() {
                         value={activeTab}
                         onChange={handleTabChange}
                         variant="fullWidth"
-                        textColor="primary"
-                        indicatorColor="primary"
                         TabIndicatorProps={{
                           sx: {
-                            height: 2,
-                            borderRadius: 999,
-                            bottom: 6,
-                            left: 16,
-                            right: 16,
-                            backgroundColor: theme.palette.primary.main,
-                            opacity: 0.7,
+                            display: 'none',
                           },
                         }}
                         sx={{
-                          borderRadius: 2,
+                          width: '100%',
+                          borderRadius: 999,
                           backgroundColor: 'rgba(140,130,255,0.08)',
-                          '& .MuiTab-root': {
-                            color: 'text.secondary',
-                            fontWeight: 600,
-                            borderRadius: 1.5,
-                            minHeight: 48,
+                          p: 0.75,
+                          '& .MuiTabs-flexContainer': {
+                            gap: 0.75,
                           },
-                          '& .Mui-selected': {
+                          '& .MuiTab-root': {
+                            flex: 1,
+                            minWidth: 'auto',
+                            borderRadius: 999,
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            color: 'rgba(217, 222, 255, 0.6)',
+                            minHeight: 48,
+                            px: { xs: 2, md: 2.5 },
+                            transition:
+                              'background-color 180ms ease, color 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+                          },
+                          '& .MuiTab-root.Mui-selected': {
                             color: 'primary.main',
                             backgroundColor: 'rgba(140,130,255,0.18)',
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 6px 18px rgba(71, 70, 160, 0.18)',
+                          },
+                          '& .MuiTab-root:not(.Mui-selected)': {
+                            backgroundColor: 'transparent',
+                            boxShadow: 'none',
+                          },
+                          '& .MuiTab-root:hover': {
+                            backgroundColor: 'rgba(140,130,255,0.12)',
                           },
                         }}
                       >
@@ -682,6 +744,7 @@ function App() {
                             key={tab.value}
                             value={tab.value}
                             label={tab.label}
+                            disableRipple
                             {...tabA11yProps(tab.value)}
                           />
                         ))}
@@ -694,6 +757,9 @@ function App() {
                           value={activeTab}
                           label="Section"
                           onChange={handleTabSelect}
+                          MenuProps={{
+                            PaperProps: { sx: menuPaperSx },
+                          }}
                         >
                           {tabItems.map((tab) => (
                             <MenuItem key={tab.value} value={tab.value}>
@@ -721,11 +787,22 @@ function App() {
                         </Stack>
                         <TextField
                           multiline
-                          minRows={5}
+                          minRows={6}
                           label="Script"
                           value={text}
                           onChange={(event) => setText(event.target.value)}
                           placeholder="Type or paste the lines you want spoken."
+                          variant="filled"
+                          sx={{
+                            backgroundColor: 'rgba(140,130,255,0.05)',
+                            borderRadius: 2,
+                            '& .MuiFilledInput-root': {
+                              borderRadius: 2,
+                              backgroundColor: 'transparent',
+                              pb: 1.5,
+                              alignItems: 'flex-start',
+                            },
+                          }}
                         />
                         <Typography variant="caption" color="text.secondary">
                           Tip: keep sentences short and clear for the most natural speech.
@@ -746,15 +823,17 @@ function App() {
                             Filter by language, audition samples, and pick the voice that matches your project.
                           </Typography>
                         </Stack>
-                        <VoiceSelector
-                          voices={voices}
-                          selectedVoice={voice}
-                          onVoiceChange={handleVoiceChange}
-                          languages={languages}
-                          selectedLanguage={selectedLanguage}
-                          onLanguageChange={handleLanguageChange}
-                          loading={voicesLoading}
-                        />
+                        <Suspense fallback={<VoiceSelectorFallback />}>
+                          <VoiceSelector
+                            voices={voices}
+                            selectedVoice={voice}
+                            onVoiceChange={handleVoiceChange}
+                            languages={languages}
+                            selectedLanguage={selectedLanguage}
+                            onLanguageChange={handleLanguageChange}
+                            loading={voicesLoading}
+                          />
+                        </Suspense>
                         {voicesError && (
                           <Alert severity="error" onClose={() => setVoicesError('')}>
                             {voicesError}
@@ -776,16 +855,18 @@ function App() {
                             Adjust pace, pitch, and loudness. Decide whether to export timed subtitles.
                           </Typography>
                         </Stack>
-                        <ProsodyControls
-                          rate={rate}
-                          pitchSteps={pitchSteps}
-                          pitchUnit={pitchUnit}
-                          volume={volume}
-                          onRateChange={setRate}
-                          onPitchValueChange={setPitchSteps}
-                          onPitchUnitChange={setPitchUnit}
-                          onVolumeChange={setVolume}
-                        />
+                        <Suspense fallback={<ProsodyControlsFallback />}>
+                          <ProsodyControls
+                            rate={rate}
+                            pitchSteps={pitchSteps}
+                            pitchUnit={pitchUnit}
+                            volume={volume}
+                            onRateChange={setRate}
+                            onPitchValueChange={setPitchSteps}
+                            onPitchUnitChange={setPitchUnit}
+                            onVolumeChange={setVolume}
+                          />
+                        </Suspense>
 
                         <Stack spacing={1.5}>
                           <Stack
@@ -852,13 +933,15 @@ function App() {
                         </Stack>
 
                         <EnhancementCard>
-                          <LLMPreprocessing
-                            llmEndpoint={llmEndpoint}
-                            onLLMEndpointChange={setLLMEndpoint}
-                            llmApiKey={llmApiKey}
-                            onLLMApiKeyChange={setLLMApiKey}
-                            requireCredentials={enhancementsActive}
-                          />
+                          <Suspense fallback={<LLMPreprocessingFallback />}>
+                            <LLMPreprocessing
+                              llmEndpoint={llmEndpoint}
+                              onLLMEndpointChange={setLLMEndpoint}
+                              llmApiKey={llmApiKey}
+                              onLLMApiKeyChange={setLLMApiKey}
+                              requireCredentials={enhancementsActive}
+                            />
+                          </Suspense>
                         </EnhancementCard>
 
                         <EnhancementOptionCard
@@ -897,31 +980,13 @@ function App() {
                     <Divider />
 
                     <Stack spacing={1.5}>
-                      <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1}
-                        alignItems={{ xs: 'flex-start', sm: 'center' }}
-                        justifyContent="space-between"
-                      >
-                        <Stack spacing={0.25}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            Final step
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Enable mock mode for demo output without calling the worker.
-                          </Typography>
-                        </Stack>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={mockMode}
-                              onChange={(event) => setMockMode(event.target.checked)}
-                              color="primary"
-                            />
-                          }
-                          label="Mock mode"
-                          sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
-                        />
+                      <Stack spacing={0.25}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                          Final step
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Generate speech with your selected voice and options.
+                        </Typography>
                       </Stack>
                       <Button
                         type="submit"
@@ -947,13 +1012,15 @@ function App() {
             </Card>
 
             {result ? (
-              <ResultPanel
-                audioBase64={result.audioBase64}
-                subtitleContent={result.subtitleContent}
-                subtitleFormat={result.subtitleFormat}
-                voice={result.voice}
-                showSubtitles={subtitlesEnabled}
-              />
+              <Suspense fallback={<ResultPanelPlaceholder />}>
+                <ResultPanel
+                  audioBase64={result.audioBase64}
+                  subtitleContent={result.subtitleContent}
+                  subtitleFormat={result.subtitleFormat}
+                  voice={result.voice}
+                  showSubtitles={subtitlesEnabled}
+                />
+              </Suspense>
             ) : (
               <Card
                 className="snap-card"
@@ -962,7 +1029,8 @@ function App() {
                   display: 'flex',
                   flexDirection: 'column',
                   minHeight: { xs: '80vh', md: '72vh' },
-                  width: { xs: '100%', md: 'min(100%, 960px)' },
+                  width: '100%',
+                  maxWidth: CARD_MAX_WIDTH,
                   mx: 'auto',
                   textAlign: 'center',
                 }}
@@ -1017,6 +1085,87 @@ function formatPitchSummary(steps: number, unit: PitchUnit): string {
     default:
       return `${steps > 0 ? '+' : ''}${steps}st`;
   }
+}
+
+function PanelSkeleton({
+  rows = 3,
+  height = 56,
+  gap = 1.5,
+}: {
+  rows?: number;
+  height?: number;
+  gap?: number;
+}) {
+  return (
+    <Stack spacing={gap}>
+      {Array.from({ length: rows }).map((_, index) => (
+        <Skeleton
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
+          variant="rounded"
+          height={height}
+          sx={{ borderRadius: 2.5, opacity: 0.55 }}
+        />
+      ))}
+    </Stack>
+  );
+}
+
+function VoiceSelectorFallback() {
+  return (
+    <Stack spacing={2.5}>
+      <Skeleton variant="rounded" height={140} sx={{ borderRadius: 3, opacity: 0.5 }} />
+      <PanelSkeleton rows={2} height={60} />
+      <PanelSkeleton rows={5} height={44} />
+    </Stack>
+  );
+}
+
+function ProsodyControlsFallback() {
+  return (
+    <Stack spacing={2.5}>
+      <PanelSkeleton rows={2} height={68} />
+      <PanelSkeleton rows={3} height={48} />
+    </Stack>
+  );
+}
+
+function LLMPreprocessingFallback() {
+  return <PanelSkeleton rows={4} height={60} />;
+}
+
+function ResultPanelPlaceholder() {
+  return (
+    <Card
+      className="snap-card"
+      sx={{
+        borderRadius: 3,
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: { xs: '80vh', md: '72vh' },
+        width: '100%',
+        maxWidth: CARD_MAX_WIDTH,
+        mx: 'auto',
+      }}
+    >
+      <CardContent
+        className="snap-card-scroll"
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2.5,
+          flexGrow: 1,
+          px: { xs: 3, md: 4 },
+          py: { xs: 3, md: 4 },
+        }}
+      >
+        <Skeleton variant="text" height={28} width="45%" />
+        <Skeleton variant="text" height={18} width="60%" />
+        <Skeleton variant="rounded" height={180} sx={{ borderRadius: 3, opacity: 0.5 }} />
+        <PanelSkeleton rows={3} height={48} />
+      </CardContent>
+    </Card>
+  );
 }
 
 function EnhancementCard({ children }: { children: ReactNode }) {

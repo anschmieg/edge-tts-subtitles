@@ -23,6 +23,7 @@ import PauseRoundedIcon from '@mui/icons-material/PauseRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { WorkerVoice, createAudioURL, generateSpeechWithSubtitles } from '../lib/workerClient';
 import { formatListPrimaryLabel, formatSelectedVoiceLabel } from '../lib/voiceDisplay';
+import { menuPaperSx } from '../theme';
 
 interface VoiceSelectorProps {
   voices: WorkerVoice[];
@@ -211,6 +212,11 @@ export function VoiceSelector({
           label="Language"
           value={selectedLanguage}
           onChange={(event) => onLanguageChange(event.target.value)}
+          SelectProps={{
+            MenuProps: {
+              PaperProps: { sx: menuPaperSx },
+            },
+          }}
           sx={{ flex: 1, minWidth: { sm: 180 } }}
         >
           {languages.map((lang) => (

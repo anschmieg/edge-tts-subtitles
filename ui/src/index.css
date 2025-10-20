@@ -48,18 +48,16 @@ textarea {
 }
 
 .snap-card {
-  transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 450ms ease,
-    opacity 450ms ease;
-  transform: scale(0.97);
-  filter: brightness(0.85);
-  opacity: 0.75;
-}
-
-.snap-card-active {
-  transform: scale(1);
-  filter: brightness(1);
-  opacity: 1;
+  --snap-progress: 0;
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 280ms ease,
+    opacity 280ms ease,
+    box-shadow 320ms ease;
+  transform: scale(calc(0.94 + (0.06 * var(--snap-progress))));
+  filter: brightness(calc(0.78 + (0.22 * var(--snap-progress))));
+  opacity: calc(0.52 + (0.48 * var(--snap-progress)));
+  box-shadow: 0 18px 48px rgba(3, 10, 28, calc(0.35 * var(--snap-progress)));
 }
 
 [data-snap-disabled='true'] {

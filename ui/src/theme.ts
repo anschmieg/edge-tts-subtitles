@@ -3,6 +3,7 @@ import { alpha, createTheme } from '@mui/material/styles';
 const primaryMain = '#8C82FF';
 const secondaryMain = '#2EE6C5';
 const surface = alpha('#0B1533', 0.85);
+const backdrop = alpha('#050912', 0.82);
 
 export const theme = createTheme({
   palette: {
@@ -95,3 +96,16 @@ export const theme = createTheme({
 });
 
 export type AppTheme = typeof theme;
+
+export const menuPaperSx = {
+  backgroundColor: backdrop,
+  backdropFilter: 'blur(18px)',
+  border: `1px solid ${alpha(primaryMain, 0.24)}`,
+  boxShadow: '0 24px 64px rgba(4, 12, 32, 0.45)',
+  overflow: 'hidden',
+  '& .MuiMenuItem-root': {
+    borderRadius: 10,
+    marginInline: 4,
+    marginBlock: 2,
+  },
+};
