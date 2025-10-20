@@ -18,11 +18,9 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Collapse,
   Container,
   Divider,
   FormControl,
-  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
@@ -70,7 +68,9 @@ const ResultPanel = lazy(() =>
   import('./components/ResultPanel').then((module) => ({ default: module.ResultPanel }))
 );
 
-type TabValue = 'script' | 'voice' | 'delivery' | 'enhance' | 'result';
+const FLOW_TABS: TabValue[] = ['script', 'voice', 'delivery', 'enhance', 'finalize'];
+
+type TabValue = 'script' | 'voice' | 'delivery' | 'enhance' | 'finalize' | 'result';
 type PitchUnit = 'percent' | 'hz' | 'semitone';
 
 interface TabPanelProps {
@@ -437,15 +437,27 @@ function App() {
     return Array.from(map.entries()).map(([code, label]) => ({ code, label }));
   }, [voices, languageFormatter]);
 
-  const tabItems: { value: TabValue; label: string }[] = [
-    { value: 'script', label: 'Script' },
-    { value: 'voice', label: 'Voice' },
-    { value: 'delivery', label: 'Delivery' },
-    { value: 'enhance', label: 'Enhance' },
-  ];
+  const tabItems: { value: TabValue; label: string }[] = FLOW_TABS.map((tab) => {
+    switch (tab) {
+      case 'script':
+        return { value: tab, label: 'Script' };
+      case 'voice':
+        return { value: tab, label: 'Voice' };
+      case 'delivery':
+        return { value: tab, label: 'Delivery' };
+      case 'enhance':
+        return { value: tab, label: 'Enhance' };
+      case 'finalize':
+        return { value: tab, label: 'Finalize' };
+      default:
+        return { value: tab, label: tab };
+    }
+  });
   if (result) {
     tabItems.push({ value: 'result', label: 'Playback' });
   }
+  const tabLabelMap = useMemo(() => new Map(tabItems.map((item) => [item.value, item.label])), [tabItems]);
+  const getTabLabel = useCallback((tab: TabValue) => tabLabelMap.get(tab) ?? tab, [tabLabelMap]);
 
   const startTabTransition = useCallback(
     (commit: () => void) => {
@@ -1072,60 +1084,16 @@ function App() {
                             pitchSteps={pitchSteps}
                             pitchUnit={pitchUnit}
                             volume={volume}
+                            subtitlesEnabled={subtitlesEnabled}
+                            subtitleFormat={subtitleFormat}
                             onRateChange={setRate}
                             onPitchValueChange={setPitchSteps}
                             onPitchUnitChange={setPitchUnit}
                             onVolumeChange={setVolume}
+                            onSubtitlesToggle={setSubtitlesEnabled}
+                            onSubtitleFormatChange={setSubtitleFormat}
                           />
                         </Suspense>
-
-                        <Stack spacing={1.5}>
-                          <Stack
-                            direction={{ xs: 'column', sm: 'row' }}
-                            spacing={1}
-                            alignItems={{ xs: 'flex-start', sm: 'center' }}
-                            justifyContent="space-between"
-                          >
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              Subtitle export
-                            </Typography>
-                            <FormControlLabel
-                              control={
-                                <Switch
-                                  checked={subtitlesEnabled}
-                                  onChange={(event) => setSubtitlesEnabled(event.target.checked)}
-                                  color="primary"
-                                />
-                              }
-                              label="Include subtitles"
-                              sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
-                            />
-                          </Stack>
-                          <Collapse in={subtitlesEnabled}>
-                            <Stack spacing={1.5}>
-                              <Typography variant="body2" color="text.secondary">
-                                Toggle between SubRip and WebVTT formats.
-                              </Typography>
-                              <FormControlLabel
-                                control={
-                                  <Switch
-                                    checked={subtitleFormat === 'vtt'}
-                                    onChange={(event) =>
-                                      setSubtitleFormat(event.target.checked ? 'vtt' : 'srt')
-                                    }
-                                    color="primary"
-                                  />
-                                }
-                                label={
-                                  subtitleFormat === 'vtt'
-                                    ? 'WebVTT (.vtt)'
-                                    : 'SubRip (.srt)'
-                                }
-                                sx={{ m: 0, '& .MuiFormControlLabel-label': { color: 'text.secondary' } }}
-                              />
-                            </Stack>
-                          </Collapse>
-                        </Stack>
                       </Stack>
                     </TabPanel>
 
@@ -1172,11 +1140,58 @@ function App() {
                       </Stack>
                     </TabPanel>
 
+                    <TabPanel current={activeTab} value="finalize">
+                      <Stack spacing={2.5}>
+                        <Stack spacing={0.75}>
+                          <Typography variant="overline" color="primary">
+                            Step 5
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Review before generating
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Confirm your selections or hop back to tweak them. Generating will render speech and subtitles with the settings below.
+                          </Typography>
+                        </Stack>
+
+                        <SummaryCard
+                          title="Snapshot"
+                          items={[
+                            selectedVoiceMeta
+                              ? formatSelectedVoiceLabel(selectedVoiceMeta, languageFormatter ?? undefined)
+                              : voicesLoading
+                              ? 'Voice: loading…'
+                              : voicesError
+                              ? 'Voice: unavailable'
+                              : voice
+                              ? `Voice: ${voice}`
+                              : 'Voice: select a voice',
+                            subtitlesEnabled
+                              ? `Subtitles: ${subtitleFormat.toUpperCase()}`
+                              : 'Subtitles: off',
+                            isProsodyDefault
+                              ? 'Delivery: neutral'
+                              : `Delivery tuned (${rate}% rate, ${formatPitchSummary(pitchSteps, pitchUnit)} pitch, ${volume >= 0 ? '+' : ''}${volume}% volume)`,
+                            enhancementsActive ? 'LLM enhancements enabled' : 'LLM enhancements off',
+                          ]}
+                        />
+
+                        <SummaryCard
+                          title="Before you continue"
+                          tone="muted"
+                          items={[
+                            'Generating will contact the worker unless mock responses are enabled.',
+                            `Estimated narration length: ${(text.length / 130).toFixed(1)} min`,
+                          ]}
+                        />
+                      </Stack>
+                    </TabPanel>
+
                     {result && (
                       <TabPanel current={activeTab} value="result">
                         <Stack spacing={1.5}>
                           <Typography variant="overline" color="primary">
-                            Step 5
+                            Step 6
                           </Typography>
                           <Typography variant="h6" sx={{ fontWeight: 600 }}>
                             Review & download
@@ -1188,35 +1203,21 @@ function App() {
                       </TabPanel>
                     )}
 
-                    <Divider />
-
-                    <Stack spacing={1.5}>
-                      <Stack spacing={0.25}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                          Final step
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Generate speech with your selected voice and options.
-                        </Typography>
-                      </Stack>
-                      <Button
-                        type="submit"
-                        variant="contained"
-                        size="large"
-                        disabled={isGenerateDisabled}
-                        startIcon={
-                          loading ? <CircularProgress size={18} color="inherit" /> : undefined
-                        }
-                        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' }, minWidth: 200 }}
-                      >
-                        {loading ? 'Generating…' : 'Generate speech'}
-                      </Button>
-                      <Collapse in={Boolean(error)}>
-                        <Alert severity="error" onClose={() => setError('')}>
-                          {error}
-                        </Alert>
-                      </Collapse>
-                    </Stack>
+                    {activeTab !== 'result' && (
+                      <>
+                        <Divider />
+                        <StepNavigation
+                          activeTab={activeTab}
+                          flowOrder={FLOW_TABS}
+                          onNavigate={changeTab}
+                          isGenerateDisabled={isGenerateDisabled}
+                          loading={loading}
+                          error={error}
+                          onClearError={() => setError('')}
+                          labelResolver={getTabLabel}
+                        />
+                      </>
+                    )}
                   </Stack>
                 </Box>
               </CardContent>
@@ -1283,6 +1284,153 @@ function App() {
 }
 
 export default App;
+
+function StepNavigation({
+  activeTab,
+  flowOrder,
+  onNavigate,
+  isGenerateDisabled,
+  loading,
+  error,
+  onClearError,
+  labelResolver,
+}: {
+  activeTab: TabValue;
+  flowOrder: TabValue[];
+  onNavigate: (tab: TabValue) => void;
+  isGenerateDisabled: boolean;
+  loading: boolean;
+  error: string;
+  onClearError: () => void;
+  labelResolver: (tab: TabValue) => string;
+}) {
+  const currentIndex = flowOrder.indexOf(activeTab);
+  const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+  const previousTab = safeIndex > 0 ? flowOrder[safeIndex - 1] : null;
+  const nextTab = safeIndex >= 0 && safeIndex < flowOrder.length - 1 ? flowOrder[safeIndex + 1] : null;
+  const isFinal = activeTab === 'finalize';
+
+  const generateLabel = loading ? 'Generating…' : isFinal ? 'Generate & render' : 'Generate now';
+
+  return (
+    <Stack spacing={2.5} sx={{ pt: { xs: 3, md: 3.5 } }}>
+      {error && (
+        <Alert severity="error" onClose={onClearError}>
+          {error}
+        </Alert>
+      )}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={{ xs: 1.5, sm: 2 }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+      >
+        <Stack spacing={0.25}>
+          <Typography variant="caption" color="text.secondary">
+            Step {Math.max(safeIndex + 1, 1)} of {flowOrder.length}
+          </Typography>
+          {nextTab && !isFinal ? (
+            <Typography variant="body2" color="text.secondary">
+              Continue to {labelResolver(nextTab)} or generate right away.
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Ready when you are—generate to render audio and subtitles.
+            </Typography>
+          )}
+        </Stack>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.2}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+        >
+          <Button
+            type="button"
+            variant="text"
+            color="inherit"
+            disabled={!previousTab}
+            onClick={() => previousTab && onNavigate(previousTab)}
+            sx={{ minWidth: 120 }}
+          >
+            Back
+          </Button>
+          {nextTab && !isFinal && (
+            <Button
+              type="button"
+              variant="outlined"
+              onClick={() => onNavigate(nextTab)}
+              sx={{ minWidth: 150 }}
+            >
+              Next: {labelResolver(nextTab)}
+            </Button>
+          )}
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isGenerateDisabled}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
+            sx={{ minWidth: isFinal ? 220 : 170 }}
+          >
+            {generateLabel}
+          </Button>
+        </Stack>
+      </Stack>
+    </Stack>
+  );
+}
+
+function SummaryCard({
+  title,
+  items,
+  tone = 'default',
+}: {
+  title: string;
+  items: string[];
+  tone?: 'default' | 'muted';
+}) {
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        border: `1px solid ${tone === 'muted' ? 'rgba(140,130,255,0.1)' : 'rgba(140,130,255,0.18)'}`,
+        backgroundColor: tone === 'muted' ? 'rgba(140,130,255,0.05)' : 'rgba(140,130,255,0.1)',
+        px: { xs: 2, md: 2.6 },
+        py: { xs: 2.2, md: 2.8 },
+      }}
+    >
+      <Stack spacing={1.6}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+          {title}
+        </Typography>
+        <Stack spacing={0.8}>
+          {items.map((item, index) => (
+            <Stack
+              key={`${title}-${index}`}
+              direction="row"
+              spacing={1}
+              alignItems="flex-start"
+            >
+              <Box
+                component="span"
+                sx={{
+                  mt: 0.75,
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(140,130,255,0.6)',
+                  flexShrink: 0,
+                }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {item}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
 
 function formatPitchSummary(steps: number, unit: PitchUnit): string {
   if (steps === 0) {
