@@ -475,6 +475,13 @@ function App() {
     if (introRemoved || introState === 'exiting') {
       return;
     }
+    if (canUseViewTransitions) {
+      setIntroState('exiting');
+      (document as any).startViewTransition(() => {
+        setIntroRemoved(true);
+      });
+      return;
+    }
     setIntroState('exiting');
     requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
@@ -602,15 +609,26 @@ function App() {
   const isGenerateDisabled =
     loading || !voice || !text.trim() || llmRequiresConfig;
 
+  const changeTab = useCallback(
+    (next: TabValue) => {
+      if (next === activeTab) return;
+      if (next !== 'result') {
+        const container = scrollContainerRef.current;
+        if (container) {
+          container.scrollTop = 0;
+        }
+      }
+      startTabTransition(() => setActiveTab(next));
+    },
+    [activeTab, startTabTransition]
+  );
+
   const handleTabChange = (_event: SyntheticEvent, value: TabValue) => {
-    if (value === activeTab) return;
-    startTabTransition(() => setActiveTab(value));
+    changeTab(value);
   };
 
   const handleTabSelect = (event: SelectChangeEvent<TabValue>) => {
-    const next = event.target.value as TabValue;
-    if (next === activeTab) return;
-    startTabTransition(() => setActiveTab(next));
+    changeTab(event.target.value as TabValue);
   };
 
   return (
@@ -724,16 +742,17 @@ function App() {
                     position: 'relative',
                     overflow: 'hidden',
                     borderRadius: 4,
-                    background:
-                    'linear-gradient(125deg, rgba(140,130,255,0.85), rgba(46,230,197,0.35))',
-                  border: '1px solid rgba(140,130,255,0.35)',
-                  color: 'primary.contrastText',
-                  px: { xs: 3, md: 6 },
-                  py: { xs: 4, md: 6 },
-                  display: 'flex',
-                  flexDirection: 'column',
-                  flex: 1,
-                }}
+                      background:
+                        'linear-gradient(125deg, rgba(140,130,255,0.85), rgba(46,230,197,0.35))',
+                      border: '1px solid rgba(140,130,255,0.35)',
+                      color: 'primary.contrastText',
+                      px: { xs: 3, md: 6 },
+                      py: { xs: 4, md: 6 },
+                      display: 'flex',
+                      flexDirection: 'column',
+                      flex: 1,
+                      viewTransitionName: 'intro-card',
+                    }}
               >
                 <CardContent
                   sx={{
@@ -881,6 +900,7 @@ function App() {
                           minHeight: 52,
                           overflow: 'hidden',
                           border: '1px solid rgba(140,130,255,0.12)',
+                          viewTransitionName: 'none',
                           '& .MuiTabs-flexContainer': {
                             gap: 0,
                             height: '100%',
