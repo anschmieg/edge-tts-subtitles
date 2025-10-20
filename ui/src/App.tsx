@@ -55,7 +55,7 @@ const DEFAULT_PITCH_STEPS = 0;
 const DEFAULT_VOLUME = 0;
 const CARD_MAX_WIDTH_MD = 960;
 const CARD_MAX_WIDTH_LG = 1120;
-const INTRO_ANIMATION_DURATION = 460;
+const INTRO_EXIT_DURATION = 420;
 
 const VoiceSelector = lazy(() =>
   import('./components/VoiceSelector').then((module) => ({ default: module.VoiceSelector }))
@@ -125,8 +125,8 @@ function App() {
   const [pitchSteps, setPitchSteps] = useState<number>(DEFAULT_PITCH_STEPS);
   const [pitchUnit, setPitchUnit] = useState<PitchUnit>('semitone');
   const [volume, setVolume] = useState<number>(DEFAULT_VOLUME);
-  const [introVisible, setIntroVisible] = useState(true);
-  const [introPhase, setIntroPhase] = useState<'entering' | 'active' | 'exiting'>('entering');
+  const [introState, setIntroState] = useState<'entering' | 'active' | 'exiting'>('entering');
+  const [introRemoved, setIntroRemoved] = useState(false);
   const [llmEndpoint, setLLMEndpoint] = useState(
     'https://api.openai.com/v1/chat/completions'
   );
@@ -144,9 +144,15 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabValue>('script');
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const snapDisableTimeout = useRef<number | null>(null);
-  const introEnterTimer = useRef<number | null>(null);
-  const introExitTimer = useRef<number | null>(null);
+  const tabFallbackTimer = useRef<number | null>(null);
+  const introFallbackTimer = useRef<number | null>(null);
   const enhancementsActive = optimizeForTTS || addSSML;
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const canUseViewTransitions =
+    typeof document !== 'undefined' &&
+    !prefersReducedMotion &&
+    typeof (document as any).startViewTransition === 'function';
+  const [tabTransitioning, setTabTransitioning] = useState(false);
 
   const languageFormatter = useMemo(() => {
     try {
@@ -184,26 +190,33 @@ function App() {
   }, [activeTab, loadVoices]);
 
   useEffect(() => {
-    if (!introVisible) {
+    if (introState !== 'entering') {
       return;
     }
-    if (introEnterTimer.current !== null) {
-      window.clearTimeout(introEnterTimer.current);
+    const timer = window.setTimeout(() => {
+      setIntroState('active');
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [introState]);
+
+  useEffect(() => {
+    if (introState !== 'exiting' || introRemoved) {
+      return;
     }
-    introEnterTimer.current = window.setTimeout(() => {
-      setIntroPhase('active');
-      if (introEnterTimer.current !== null) {
-        window.clearTimeout(introEnterTimer.current);
-        introEnterTimer.current = null;
-      }
-    }, 32);
+    if (introFallbackTimer.current !== null) {
+      window.clearTimeout(introFallbackTimer.current);
+    }
+    introFallbackTimer.current = window.setTimeout(() => {
+      setIntroRemoved(true);
+      introFallbackTimer.current = null;
+    }, INTRO_EXIT_DURATION);
     return () => {
-      if (introEnterTimer.current !== null) {
-        window.clearTimeout(introEnterTimer.current);
-        introEnterTimer.current = null;
+      if (introFallbackTimer.current !== null) {
+        window.clearTimeout(introFallbackTimer.current);
+        introFallbackTimer.current = null;
       }
     };
-  }, [introVisible]);
+  }, [introState, introRemoved]);
 
   useEffect(() => {
     if (voiceManuallySet) return;
@@ -214,19 +227,6 @@ function App() {
       setVoice(defaultVoice.shortName);
     }
   }, [voices, voice, voiceManuallySet]);
-
-  useEffect(() => {
-    return () => {
-      if (introEnterTimer.current !== null) {
-        window.clearTimeout(introEnterTimer.current);
-        introEnterTimer.current = null;
-      }
-      if (introExitTimer.current !== null) {
-        window.clearTimeout(introExitTimer.current);
-        introExitTimer.current = null;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (result) {
@@ -265,10 +265,12 @@ function App() {
         entries.forEach((entry) => {
           const target = entry.target;
           if (target instanceof HTMLElement) {
+            const introMarker = target.getAttribute('data-intro-state');
+            if (introMarker === 'exiting') {
+              target.style.setProperty('--snap-progress', '1');
+              return;
+            }
             if (!entry.isIntersecting) {
-              if (target.getAttribute('data-intro-state') === 'exiting') {
-                return;
-              }
               target.style.setProperty('--snap-progress', '0');
               return;
             }
@@ -312,7 +314,7 @@ function App() {
       });
       observer.disconnect();
     };
-  }, [result, activeTab, subtitlesEnabled, subtitleFormat, introVisible]);
+  }, [result, activeTab, subtitlesEnabled, subtitleFormat, introState, introRemoved]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -407,6 +409,23 @@ function App() {
     [voices, voice]
   );
 
+  useEffect(() => {
+    return () => {
+      if (tabFallbackTimer.current !== null) {
+        window.clearTimeout(tabFallbackTimer.current);
+        tabFallbackTimer.current = null;
+      }
+      if (introFallbackTimer.current !== null) {
+        window.clearTimeout(introFallbackTimer.current);
+        introFallbackTimer.current = null;
+      }
+      if (snapDisableTimeout.current !== null) {
+        window.clearTimeout(snapDisableTimeout.current);
+        snapDisableTimeout.current = null;
+      }
+    };
+  }, []);
+
   const languages = useMemo(() => {
     const map = new Map<string, string>();
     map.set('all', 'All languages');
@@ -428,26 +447,35 @@ function App() {
     tabItems.push({ value: 'result', label: 'Playback' });
   }
 
+  const startTabTransition = useCallback(
+    (commit: () => void) => {
+      if (canUseViewTransitions) {
+        (document as any).startViewTransition(commit);
+        return;
+      }
+      commit();
+      if (!prefersReducedMotion) {
+        setTabTransitioning(true);
+        if (tabFallbackTimer.current !== null) {
+          window.clearTimeout(tabFallbackTimer.current);
+        }
+        tabFallbackTimer.current = window.setTimeout(() => {
+          setTabTransitioning(false);
+          tabFallbackTimer.current = null;
+        }, 260);
+      }
+    },
+    [canUseViewTransitions, prefersReducedMotion]
+  );
+
   const isProsodyDefault =
     rate === DEFAULT_RATE && pitchSteps === DEFAULT_PITCH_STEPS && volume === DEFAULT_VOLUME;
 
   const handleDismissIntro = () => {
-    if (!introVisible || introPhase === 'exiting') {
+    if (introRemoved || introState === 'exiting') {
       return;
     }
-    if (introEnterTimer.current !== null) {
-      window.clearTimeout(introEnterTimer.current);
-      introEnterTimer.current = null;
-    }
-    setIntroPhase('exiting');
-    if (introExitTimer.current !== null) {
-      window.clearTimeout(introExitTimer.current);
-      introExitTimer.current = null;
-    }
-    introExitTimer.current = window.setTimeout(() => {
-      setIntroVisible(false);
-      introExitTimer.current = null;
-    }, INTRO_ANIMATION_DURATION);
+    setIntroState('exiting');
     requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
       if (container) {
@@ -575,11 +603,14 @@ function App() {
     loading || !voice || !text.trim() || llmRequiresConfig;
 
   const handleTabChange = (_event: SyntheticEvent, value: TabValue) => {
-    setActiveTab(value);
+    if (value === activeTab) return;
+    startTabTransition(() => setActiveTab(value));
   };
 
   const handleTabSelect = (event: SelectChangeEvent<TabValue>) => {
-    setActiveTab(event.target.value as TabValue);
+    const next = event.target.value as TabValue;
+    if (next === activeTab) return;
+    startTabTransition(() => setActiveTab(next));
   };
 
   return (
@@ -676,11 +707,19 @@ function App() {
               },
             })}
           >
-            {introVisible && (
-              <SnapSection>
+            {!introRemoved && (
+              <SnapSection
+                phase={
+                  introState === 'entering'
+                    ? 'entering'
+                    : introState === 'exiting'
+                    ? 'exiting'
+                    : undefined
+                }
+              >
                 <Card
                   className="snap-card intro-card"
-                  data-intro-state={introPhase}
+                  data-intro-state={introState}
                   sx={{
                     position: 'relative',
                     overflow: 'hidden',
@@ -784,7 +823,11 @@ function App() {
                       mx: { xs: -1.5, md: -2 },
                     }}
                   >
-                    <Stack spacing={3}>
+                    <Stack
+                      spacing={3}
+                      data-view-transition-name="tab-content"
+                      className={tabTransitioning ? 'tab-content-transitioning' : undefined}
+                    >
                       <Stack spacing={1}>
                         <Typography variant="overline" color="primary">
                           Snapshot
@@ -834,9 +877,13 @@ function App() {
                           width: '100%',
                           borderRadius: 999,
                           backgroundColor: 'rgba(140,130,255,0.08)',
-                          p: 0.75,
+                          p: 0,
+                          minHeight: 52,
+                          overflow: 'hidden',
+                          border: '1px solid rgba(140,130,255,0.12)',
                           '& .MuiTabs-flexContainer': {
-                            gap: 0.75,
+                            gap: 0,
+                            height: '100%',
                           },
                           '& .MuiTab-root': {
                             flex: 1,
@@ -845,9 +892,16 @@ function App() {
                             textTransform: 'none',
                             fontWeight: 600,
                             color: 'rgba(208, 214, 255, 0.58)',
-                            minHeight: 48,
-                            px: { xs: 2.2, md: 2.75 },
+                            minHeight: 'inherit',
+                            height: '100%',
+                            px: { xs: 2.4, md: 3 },
+                            py: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            clipPath: 'inset(0 round 999px)',
                             letterSpacing: 0.2,
+                            backgroundColor: 'transparent',
                             transition:
                               'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms ease, color 180ms ease, box-shadow 220ms ease',
                           },
@@ -855,16 +909,20 @@ function App() {
                             color: '#F5F7FF',
                             background:
                               'linear-gradient(120deg, rgba(140,130,255,0.28), rgba(46,230,197,0.24))',
-                            transform: 'translateY(-2px)',
+                            transform: 'none',
                             boxShadow: '0 10px 26px rgba(71, 70, 160, 0.26)',
                           },
                           '& .MuiTab-root:not(.Mui-selected)': {
-                            backgroundColor: 'rgba(140,130,255,0.04)',
                             boxShadow: 'none',
-                            transform: 'translateY(0)',
+                            transform: 'none',
                           },
                           '& .MuiTab-root:hover': {
                             backgroundColor: 'rgba(140,130,255,0.12)',
+                            color: 'rgba(233, 236, 255, 0.9)',
+                          },
+                          '& .MuiTab-root.Mui-selected:hover': {
+                            background:
+                              'linear-gradient(120deg, rgba(140,130,255,0.32), rgba(46,230,197,0.32))',
                           },
                         }}
                       >
@@ -952,17 +1010,21 @@ function App() {
                             Filter by language, audition samples, and pick the voice that matches your project.
                           </Typography>
                         </Stack>
-                        <Suspense fallback={<VoiceSelectorFallback />}>
-                          <VoiceSelector
-                            voices={voices}
-                            selectedVoice={voice}
-                            onVoiceChange={handleVoiceChange}
-                            languages={languages}
-                            selectedLanguage={selectedLanguage}
-                            onLanguageChange={handleLanguageChange}
-                            loading={voicesLoading}
-                          />
-                        </Suspense>
+                        {activeTab === 'voice' ? (
+                          <Suspense fallback={<VoiceSelectorFallback />}>
+                            <VoiceSelector
+                              voices={voices}
+                              selectedVoice={voice}
+                              onVoiceChange={handleVoiceChange}
+                              languages={languages}
+                              selectedLanguage={selectedLanguage}
+                              onLanguageChange={handleLanguageChange}
+                              loading={voicesLoading}
+                            />
+                          </Suspense>
+                        ) : (
+                          <VoiceSelectorFallback />
+                        )}
                         {voicesError && (
                           <Alert severity="error" onClose={() => setVoicesError('')}>
                             {voicesError}
@@ -1302,10 +1364,18 @@ function ResultPanelPlaceholder() {
   );
 }
 
-function SnapSection({ children }: { children: ReactNode }) {
+function SnapSection({
+  children,
+  phase,
+}: {
+  children: ReactNode;
+  phase?: 'entering' | 'exiting';
+}) {
   return (
     <>
-      <Box className="snap-section">{children}</Box>
+      <Box className="snap-section" data-phase={phase}>
+        {children}
+      </Box>
       <Box className="snap-end-anchor" aria-hidden />
     </>
   );

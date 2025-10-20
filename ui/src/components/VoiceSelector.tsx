@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Chip,
@@ -36,8 +36,10 @@ interface VoiceSelectorProps {
 }
 
 const ALL_LANGUAGES_VALUE = 'all';
+const INITIAL_RENDER_COUNT = 80;
+const RENDER_STEP = 80;
 
-export function VoiceSelector({
+function VoiceSelectorComponent({
   voices,
   selectedVoice,
   onVoiceChange,
@@ -50,6 +52,20 @@ export function VoiceSelector({
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_COUNT);
+  const incrementalHandle = useRef<number | null>(null);
+
+  const clearScheduledIncrement = useCallback(() => {
+    if (incrementalHandle.current === null) {
+      return;
+    }
+    if (typeof (window as any).cancelIdleCallback === 'function') {
+      (window as any).cancelIdleCallback(incrementalHandle.current);
+    } else {
+      clearTimeout(incrementalHandle.current);
+    }
+    incrementalHandle.current = null;
+  }, []);
 
   const languageFormatter = useMemo(() => {
     try {
@@ -94,9 +110,51 @@ export function VoiceSelector({
     return list;
   }, [voices, selectedLanguage, query]);
 
+  useEffect(() => {
+    clearScheduledIncrement();
+    setRenderLimit(INITIAL_RENDER_COUNT);
+  }, [filteredVoices, clearScheduledIncrement]);
+
+  useEffect(() => {
+    if (renderLimit >= filteredVoices.length) {
+      clearScheduledIncrement();
+      return;
+    }
+
+    const schedule = () => {
+      if (typeof (window as any).requestIdleCallback === 'function') {
+        incrementalHandle.current = (window as any).requestIdleCallback(
+          () => {
+            setRenderLimit((previous) =>
+              Math.min(filteredVoices.length, previous + RENDER_STEP)
+            );
+          },
+          { timeout: 120 }
+        );
+      } else {
+        incrementalHandle.current = window.setTimeout(() => {
+          setRenderLimit((previous) =>
+            Math.min(filteredVoices.length, previous + RENDER_STEP)
+          );
+        }, 60);
+      }
+    };
+
+    schedule();
+
+    return () => {
+      clearScheduledIncrement();
+    };
+  }, [filteredVoices, renderLimit, clearScheduledIncrement]);
+
+  const limitedVoices = useMemo(
+    () => filteredVoices.slice(0, renderLimit),
+    [filteredVoices, renderLimit]
+  );
+
   const groupedVoices = useMemo(() => {
     const groups = new Map<string, WorkerVoice[]>();
-    filteredVoices.forEach((voice) => {
+    limitedVoices.forEach((voice) => {
       if (!groups.has(voice.locale)) {
         groups.set(voice.locale, []);
       }
@@ -117,12 +175,14 @@ export function VoiceSelector({
         };
       })
       .sort((a, b) => a.locale.localeCompare(b.locale));
-  }, [filteredVoices, languages, languageFormatter]);
+  }, [limitedVoices, languages, languageFormatter]);
 
   const selectedVoiceMeta = useMemo(
     () => voices.find((voice) => voice.shortName === selectedVoice) || null,
     [voices, selectedVoice]
   );
+
+  const hasMoreToRender = renderLimit < filteredVoices.length;
 
   const stopPlayback = () => {
     if (audioElement) {
@@ -340,6 +400,12 @@ export function VoiceSelector({
         </List>
       )}
 
+      {hasMoreToRender && (
+        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+          Loading more voices…
+        </Typography>
+      )}
+
       {selectedVoiceMeta && (
         <Box sx={{ borderRadius: 2, border: '1px solid rgba(140,130,255,0.12)', p: 2 }}>
           <Typography variant="subtitle2">
@@ -353,6 +419,8 @@ export function VoiceSelector({
     </Stack>
   );
 }
+
+export const VoiceSelector = memo(VoiceSelectorComponent);
 
 function SelectedVoiceCard({
   voice,
