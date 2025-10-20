@@ -49,15 +49,71 @@ textarea {
 
 .snap-card {
   --snap-progress: 0;
+  --snap-scale: calc(0.94 + (0.06 * var(--snap-progress)));
+  --snap-filter: brightness(calc(0.78 + (0.22 * var(--snap-progress))));
+  --snap-opacity: calc(0.52 + (0.48 * var(--snap-progress)));
+  --snap-translate: 0px;
   transition:
     transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
     filter 280ms ease,
     opacity 280ms ease,
     box-shadow 320ms ease;
-  transform: scale(calc(0.94 + (0.06 * var(--snap-progress))));
-  filter: brightness(calc(0.78 + (0.22 * var(--snap-progress))));
-  opacity: calc(0.52 + (0.48 * var(--snap-progress)));
+  transform: translate3d(0, var(--snap-translate), 0) scale(var(--snap-scale));
+  filter: var(--snap-filter);
+  opacity: var(--snap-opacity);
   box-shadow: 0 18px 48px rgba(3, 10, 28, calc(0.35 * var(--snap-progress)));
+}
+
+.snap-section {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  align-items: stretch;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.snap-end-anchor {
+  height: 1px;
+  width: 100%;
+  scroll-snap-align: end;
+  scroll-snap-stop: always;
+  pointer-events: none;
+}
+
+.intro-card {
+  position: relative;
+  --intro-duration: 460ms;
+  transition:
+    transform var(--intro-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    filter var(--intro-duration) ease,
+    opacity var(--intro-duration) ease,
+    box-shadow var(--intro-duration) ease;
+}
+
+.intro-card[data-intro-state='entering'] {
+  --snap-progress: 1;
+  --snap-scale: 1;
+  --snap-filter: brightness(0.9);
+  --snap-opacity: 0;
+  --snap-translate: 36px;
+}
+
+.intro-card[data-intro-state='active'] {
+  --snap-progress: 1;
+  --snap-scale: 1;
+  --snap-filter: brightness(1);
+  --snap-opacity: 1;
+  --snap-translate: 0px;
+}
+
+.intro-card[data-intro-state='exiting'] {
+  --snap-progress: 1;
+  --snap-scale: 0.96;
+  --snap-filter: brightness(1.12);
+  --snap-opacity: 0;
+  --snap-translate: -64px;
+  pointer-events: none;
 }
 
 [data-snap-disabled='true'] {

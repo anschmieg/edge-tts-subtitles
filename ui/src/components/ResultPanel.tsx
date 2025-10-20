@@ -136,7 +136,7 @@ export function ResultPanel({
         flexDirection: 'column',
         minHeight: { xs: '80vh', md: '72vh' },
         width: '100%',
-        maxWidth: 880,
+        maxWidth: { md: 960, lg: 1120 },
         mx: 'auto',
       }}
     >

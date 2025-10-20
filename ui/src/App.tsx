@@ -53,7 +53,9 @@ const DEFAULT_VOICE_ID = 'en-US-EmmaMultilingualNeural';
 const DEFAULT_RATE = 100;
 const DEFAULT_PITCH_STEPS = 0;
 const DEFAULT_VOLUME = 0;
-const CARD_MAX_WIDTH = 880;
+const CARD_MAX_WIDTH_MD = 960;
+const CARD_MAX_WIDTH_LG = 1120;
+const INTRO_ANIMATION_DURATION = 460;
 
 const VoiceSelector = lazy(() =>
   import('./components/VoiceSelector').then((module) => ({ default: module.VoiceSelector }))
@@ -123,6 +125,8 @@ function App() {
   const [pitchSteps, setPitchSteps] = useState<number>(DEFAULT_PITCH_STEPS);
   const [pitchUnit, setPitchUnit] = useState<PitchUnit>('semitone');
   const [volume, setVolume] = useState<number>(DEFAULT_VOLUME);
+  const [introVisible, setIntroVisible] = useState(true);
+  const [introPhase, setIntroPhase] = useState<'entering' | 'active' | 'exiting'>('entering');
   const [llmEndpoint, setLLMEndpoint] = useState(
     'https://api.openai.com/v1/chat/completions'
   );
@@ -140,6 +144,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabValue>('script');
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const snapDisableTimeout = useRef<number | null>(null);
+  const introEnterTimer = useRef<number | null>(null);
+  const introExitTimer = useRef<number | null>(null);
   const enhancementsActive = optimizeForTTS || addSSML;
 
   const languageFormatter = useMemo(() => {
@@ -178,11 +184,26 @@ function App() {
   }, [activeTab, loadVoices]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      loadVoices();
-    }, 550);
-    return () => window.clearTimeout(timer);
-  }, [loadVoices]);
+    if (!introVisible) {
+      return;
+    }
+    if (introEnterTimer.current !== null) {
+      window.clearTimeout(introEnterTimer.current);
+    }
+    introEnterTimer.current = window.setTimeout(() => {
+      setIntroPhase('active');
+      if (introEnterTimer.current !== null) {
+        window.clearTimeout(introEnterTimer.current);
+        introEnterTimer.current = null;
+      }
+    }, 32);
+    return () => {
+      if (introEnterTimer.current !== null) {
+        window.clearTimeout(introEnterTimer.current);
+        introEnterTimer.current = null;
+      }
+    };
+  }, [introVisible]);
 
   useEffect(() => {
     if (voiceManuallySet) return;
@@ -193,6 +214,19 @@ function App() {
       setVoice(defaultVoice.shortName);
     }
   }, [voices, voice, voiceManuallySet]);
+
+  useEffect(() => {
+    return () => {
+      if (introEnterTimer.current !== null) {
+        window.clearTimeout(introEnterTimer.current);
+        introEnterTimer.current = null;
+      }
+      if (introExitTimer.current !== null) {
+        window.clearTimeout(introExitTimer.current);
+        introExitTimer.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (result) {
@@ -212,7 +246,7 @@ function App() {
       return;
     }
 
-    const cards = Array.from(container.querySelectorAll<HTMLElement>(':scope > .snap-card'));
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('.snap-card'));
     if (!cards.length) {
       return;
     }
@@ -220,18 +254,48 @@ function App() {
     const thresholds = Array.from({ length: 21 }, (_, index) => index / 20);
 
     cards.forEach((card, index) => {
-      card.style.setProperty('--snap-progress', index === 0 ? '1' : '0');
+      const initial = index === 0 ? 1 : 0;
+      card.style.setProperty('--snap-progress', initial.toFixed(3));
     });
 
     const observer = new IntersectionObserver(
       (entries) => {
+        const containerRect = container.getBoundingClientRect();
+        const containerHeight = containerRect.height || 1;
         entries.forEach((entry) => {
-          const ratio = entry.intersectionRatio;
-          const eased = Math.max(0, Math.min(1, (ratio - 0.25) / 0.75));
           const target = entry.target;
           if (target instanceof HTMLElement) {
-            target.setAttribute('data-snap-progress', eased.toFixed(3));
-            target.style.setProperty('--snap-progress', eased.toFixed(3));
+            if (!entry.isIntersecting) {
+              if (target.getAttribute('data-intro-state') === 'exiting') {
+                return;
+              }
+              target.style.setProperty('--snap-progress', '0');
+              return;
+            }
+            const visibleHeight = entry.intersectionRect.height;
+            const heightRatio = Math.max(
+              0,
+              Math.min(1, visibleHeight / containerHeight)
+            );
+            const topGap = Math.abs(entry.boundingClientRect.top - containerRect.top);
+            const bottomGap = Math.abs(
+              entry.boundingClientRect.bottom - containerRect.bottom
+            );
+            let progress = heightRatio;
+            if (topGap <= 16 || bottomGap <= 16) {
+              progress = 1;
+            } else {
+              const cardCenter =
+                entry.boundingClientRect.top + entry.boundingClientRect.height / 2;
+              const containerCenter = containerRect.top + containerHeight / 2;
+              const centerDelta = Math.abs(cardCenter - containerCenter);
+              const normalizedCenter =
+                containerHeight > 0
+                  ? Math.max(0, 1 - centerDelta / (containerHeight / 2))
+                  : 0;
+              progress = Math.max(progress, normalizedCenter);
+            }
+            target.style.setProperty('--snap-progress', progress.toFixed(3));
           }
         });
       },
@@ -248,7 +312,7 @@ function App() {
       });
       observer.disconnect();
     };
-  }, [result, activeTab, subtitlesEnabled, subtitleFormat]);
+  }, [result, activeTab, subtitlesEnabled, subtitleFormat, introVisible]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -366,6 +430,31 @@ function App() {
 
   const isProsodyDefault =
     rate === DEFAULT_RATE && pitchSteps === DEFAULT_PITCH_STEPS && volume === DEFAULT_VOLUME;
+
+  const handleDismissIntro = () => {
+    if (!introVisible || introPhase === 'exiting') {
+      return;
+    }
+    if (introEnterTimer.current !== null) {
+      window.clearTimeout(introEnterTimer.current);
+      introEnterTimer.current = null;
+    }
+    setIntroPhase('exiting');
+    if (introExitTimer.current !== null) {
+      window.clearTimeout(introExitTimer.current);
+      introExitTimer.current = null;
+    }
+    introExitTimer.current = window.setTimeout(() => {
+      setIntroVisible(false);
+      introExitTimer.current = null;
+    }, INTRO_ANIMATION_DURATION);
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  };
 
   const handleVoiceChange = (voiceId: string) => {
     setVoice(voiceId);
@@ -554,10 +643,11 @@ function App() {
           }}
         >
           <Stack
+            className="snap-stack"
             data-testid="snap-stack"
             ref={scrollContainerRef}
-            spacing={{ xs: 3, md: 4 }}
-            sx={{
+            spacing={0}
+            sx={(theme) => ({
               flex: 1,
               minHeight: 0,
               maxHeight: '100%',
@@ -567,102 +657,138 @@ function App() {
               scrollBehavior: 'smooth',
               scrollSnapType: 'y mandatory',
               scrollSnapStop: 'always',
-              scrollPaddingTop: (theme) => theme.spacing(3),
+              scrollPaddingTop: theme.spacing(3),
+              scrollPaddingBottom: theme.spacing(3),
               pb: 4,
               px: { xs: 1.5, md: 0 },
-              alignItems: 'center',
+              alignItems: 'stretch',
               scrollbarWidth: 'none',
+              '--snap-gap': theme.spacing(3),
+              [theme.breakpoints.up('md')]: {
+                '--snap-gap': theme.spacing(4),
+              },
               '&::-webkit-scrollbar': { display: 'none' },
-              '& > *': {
-                scrollSnapAlign: 'start',
-                scrollSnapStop: 'always',
-                flexShrink: 0,
+              '& > .snap-section': {
+                marginTop: 'var(--snap-gap)',
               },
-              '& > .MuiDivider-root': {
-                alignSelf: 'stretch',
+              '& > .snap-section:first-of-type': {
+                marginTop: 0,
               },
-            }}
+            })}
           >
-            <Card
-              className="snap-card"
-              sx={{
-                position: 'relative',
-                overflow: 'hidden',
-                borderRadius: 4,
-                background: 'linear-gradient(125deg, rgba(140,130,255,0.85), rgba(46,230,197,0.35))',
-                border: '1px solid rgba(140,130,255,0.35)',
-                color: 'primary.contrastText',
-                px: { xs: 3, md: 6 },
-                py: { xs: 4, md: 6 },
-                minHeight: { xs: '80vh', md: '72vh' },
-                width: '100%',
-                maxWidth: CARD_MAX_WIDTH,
-                mx: 'auto',
-              }}
-            >
-              <CardContent sx={{ px: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
-                <Stack spacing={3}>
-                  <Chip
-                    icon={<AutoAwesomeRoundedIcon />}
-                    label="Progressive web experience"
-                    variant="outlined"
-                    sx={{
-                      alignSelf: { xs: 'flex-start', md: 'center' },
-                      color: 'primary.contrastText',
-                      borderColor: 'primary.contrastText',
-                      backgroundColor: 'rgba(255,255,255,0.08)',
-                      fontSize: 13,
-                      '& .MuiChip-icon': { color: 'primary.contrastText' },
-                    }}
-                  />
-                  <Typography variant="h3" sx={{ fontWeight: 700, letterSpacing: '-0.03em' }}>
-                    Craft speech, tune delivery, publish instantly.
-                  </Typography>
-                  <Typography variant="h6" sx={{ opacity: 0.85, fontWeight: 400 }}>
-                    Start with plain text, then step into voice, parameters, and enhancements only
-                    when you need them. Your player appears as soon as audio renders.
-                  </Typography>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="snap-card"
-              component="form"
-              onSubmit={handleSubmit}
-              sx={{
-                borderRadius: 3,
-                minHeight: { xs: '80vh', md: '72vh' },
-                width: '100%',
-                maxWidth: CARD_MAX_WIDTH,
-                mx: 'auto',
-              }}
-            >
-              <CardContent
-                sx={{
+            {introVisible && (
+              <SnapSection>
+                <Card
+                  className="snap-card intro-card"
+                  data-intro-state={introPhase}
+                  sx={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: 4,
+                    background:
+                    'linear-gradient(125deg, rgba(140,130,255,0.85), rgba(46,230,197,0.35))',
+                  border: '1px solid rgba(140,130,255,0.35)',
+                  color: 'primary.contrastText',
+                  px: { xs: 3, md: 6 },
+                  py: { xs: 4, md: 6 },
                   display: 'flex',
                   flexDirection: 'column',
                   flex: 1,
-                  minHeight: 0,
-                  px: { xs: 2.5, md: 4 },
-                  py: { xs: 3, md: 4 },
                 }}
               >
-                <Box
-                  className="snap-card-scroll"
+                <CardContent
                   sx={{
-                    overflowY: 'auto',
-                    overscrollBehavior: 'contain',
-                    px: { xs: 1.5, md: 2 },
-                    pb: 4,
-                    mx: { xs: -1.5, md: -2 },
+                    px: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: { xs: 4, md: 5 },
+                    flex: 1,
                   }}
                 >
                   <Stack spacing={3}>
-                    <Stack spacing={1}>
-                      <Typography variant="overline" color="primary">
-                        Snapshot
+                    <Chip
+                      icon={<AutoAwesomeRoundedIcon />}
+                      label="Progressive web experience"
+                      variant="outlined"
+                      sx={{
+                        alignSelf: { xs: 'flex-start', md: 'center' },
+                        color: 'primary.contrastText',
+                        borderColor: 'primary.contrastText',
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        fontSize: 13,
+                        '& .MuiChip-icon': { color: 'primary.contrastText' },
+                      }}
+                    />
+                    <Stack spacing={2.5}>
+                      <Typography variant="h3" sx={{ fontWeight: 700, letterSpacing: '-0.03em' }}>
+                        Craft speech, tune delivery, publish instantly.
                       </Typography>
+                      <Typography variant="h6" sx={{ opacity: 0.85, fontWeight: 400 }}>
+                        Start with plain text, then step into voice, parameters, and enhancements only
+                        when you need them. Your player appears as soon as audio renders.
+                      </Typography>
+                    </Stack>
+                  </Stack>
+                  <Button
+                    type="button"
+                    variant="contained"
+                    color="secondary"
+                    size="large"
+                    onClick={handleDismissIntro}
+                    sx={{
+                      alignSelf: { xs: 'stretch', sm: 'center' },
+                      minWidth: 220,
+                      fontSize: 16,
+                      px: 4,
+                      py: 1.25,
+                    }}
+                  >
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+              </SnapSection>
+            )}
+
+            <SnapSection>
+              <Card
+                className="snap-card"
+                component="form"
+                onSubmit={handleSubmit}
+                sx={{
+                  borderRadius: 3,
+                  minHeight: { xs: '80vh', md: '72vh' },
+                  width: '100%',
+                  maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
+                  mx: 'auto',
+                }}
+              >
+                <CardContent
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: 1,
+                    minHeight: 0,
+                    px: { xs: 2.5, md: 4 },
+                    py: { xs: 3, md: 4 },
+                  }}
+                >
+                  <Box
+                    className="snap-card-scroll"
+                    sx={{
+                      overflowY: 'auto',
+                      overscrollBehavior: 'contain',
+                      px: { xs: 1.5, md: 2 },
+                      pb: 4,
+                      mx: { xs: -1.5, md: -2 },
+                    }}
+                  >
+                    <Stack spacing={3}>
+                      <Stack spacing={1}>
+                        <Typography variant="overline" color="primary">
+                          Snapshot
+                        </Typography>
                       <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
                         <Chip
                           label={
@@ -718,21 +844,24 @@ function App() {
                             borderRadius: 999,
                             textTransform: 'none',
                             fontWeight: 600,
-                            color: 'rgba(217, 222, 255, 0.6)',
+                            color: 'rgba(208, 214, 255, 0.58)',
                             minHeight: 48,
-                            px: { xs: 2, md: 2.5 },
+                            px: { xs: 2.2, md: 2.75 },
+                            letterSpacing: 0.2,
                             transition:
-                              'background-color 180ms ease, color 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+                              'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms ease, color 180ms ease, box-shadow 220ms ease',
                           },
                           '& .MuiTab-root.Mui-selected': {
-                            color: 'primary.main',
-                            backgroundColor: 'rgba(140,130,255,0.18)',
-                            transform: 'translateY(-1px)',
-                            boxShadow: '0 6px 18px rgba(71, 70, 160, 0.18)',
+                            color: '#F5F7FF',
+                            background:
+                              'linear-gradient(120deg, rgba(140,130,255,0.28), rgba(46,230,197,0.24))',
+                            transform: 'translateY(-2px)',
+                            boxShadow: '0 10px 26px rgba(71, 70, 160, 0.26)',
                           },
                           '& .MuiTab-root:not(.Mui-selected)': {
-                            backgroundColor: 'transparent',
+                            backgroundColor: 'rgba(140,130,255,0.04)',
                             boxShadow: 'none',
+                            transform: 'translateY(0)',
                           },
                           '& .MuiTab-root:hover': {
                             backgroundColor: 'rgba(140,130,255,0.12)',
@@ -1009,55 +1138,60 @@ function App() {
                   </Stack>
                 </Box>
               </CardContent>
-            </Card>
+              </Card>
+            </SnapSection>
 
             {result ? (
-              <Suspense fallback={<ResultPanelPlaceholder />}>
-                <ResultPanel
-                  audioBase64={result.audioBase64}
-                  subtitleContent={result.subtitleContent}
-                  subtitleFormat={result.subtitleFormat}
-                  voice={result.voice}
-                  showSubtitles={subtitlesEnabled}
-                />
-              </Suspense>
+              <SnapSection>
+                <Suspense fallback={<ResultPanelPlaceholder />}>
+                  <ResultPanel
+                    audioBase64={result.audioBase64}
+                    subtitleContent={result.subtitleContent}
+                    subtitleFormat={result.subtitleFormat}
+                    voice={result.voice}
+                    showSubtitles={subtitlesEnabled}
+                  />
+                </Suspense>
+              </SnapSection>
             ) : (
-              <Card
-                className="snap-card"
-                sx={{
-                  borderRadius: 3,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: { xs: '80vh', md: '72vh' },
-                  width: '100%',
-                  maxWidth: CARD_MAX_WIDTH,
-                  mx: 'auto',
-                  textAlign: 'center',
-                }}
-              >
-                <CardContent
-                  className="snap-card-scroll"
+              <SnapSection>
+                <Card
+                  className="snap-card"
                   sx={{
-                    flex: 1,
+                    borderRadius: 3,
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflowY: 'auto',
-                    overscrollBehavior: 'contain',
-                    px: { xs: 3, md: 4 },
-                    py: { xs: 4, md: 5 },
+                    minHeight: { xs: '80vh', md: '72vh' },
+                    width: '100%',
+                    maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
+                    mx: 'auto',
+                    textAlign: 'center',
                   }}
                 >
-                  <Stack spacing={2} alignItems="center">
-                    <Typography variant="h6">Your rendered audio will appear here.</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
-                      Step through the tabs: enter text, audition voices, tweak delivery, optionally
-                      enhance with LLM, then generate to unlock the playback tab.
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
+                  <CardContent
+                    className="snap-card-scroll"
+                    sx={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflowY: 'auto',
+                      overscrollBehavior: 'contain',
+                      px: { xs: 3, md: 4 },
+                      py: { xs: 4, md: 5 },
+                    }}
+                  >
+                    <Stack spacing={2} alignItems="center">
+                      <Typography variant="h6">Your rendered audio will appear here.</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
+                        Step through the tabs: enter text, audition voices, tweak delivery, optionally
+                        enhance with LLM, then generate to unlock the playback tab.
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </SnapSection>
             )}
           </Stack>
         </Container>
@@ -1144,7 +1278,7 @@ function ResultPanelPlaceholder() {
         flexDirection: 'column',
         minHeight: { xs: '80vh', md: '72vh' },
         width: '100%',
-        maxWidth: CARD_MAX_WIDTH,
+        maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
         mx: 'auto',
       }}
     >
@@ -1165,6 +1299,15 @@ function ResultPanelPlaceholder() {
         <PanelSkeleton rows={3} height={48} />
       </CardContent>
     </Card>
+  );
+}
+
+function SnapSection({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <Box className="snap-section">{children}</Box>
+      <Box className="snap-end-anchor" aria-hidden />
+    </>
   );
 }
 
