@@ -12,6 +12,7 @@ export function TranscriptPlayer({ audioRef, cues, currentTime }: TranscriptPlay
   const [activeWordIndices, setActiveWordIndices] = useState<Map<string, number>>(new Map());
   const activeCueRef = useRef<HTMLDivElement>(null);
   const activeWordRef = useRef<HTMLSpanElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Find active cue and active word within that cue
   useEffect(() => {
@@ -33,12 +34,22 @@ export function TranscriptPlayer({ audioRef, cues, currentTime }: TranscriptPlay
     setActiveWordIndices(newActiveWordIndices);
   }, [currentTime, cues]);
 
-  // Scroll active word into view
+  // Scroll active line to center
   useEffect(() => {
-    if (activeWordRef.current) {
-      activeWordRef.current.scrollIntoView({
+    if (activeCueRef.current && containerRef.current) {
+      const container = containerRef.current;
+      const activeElement = activeCueRef.current;
+      
+      const containerHeight = container.clientHeight;
+      const elementTop = activeElement.offsetTop;
+      const elementHeight = activeElement.offsetHeight;
+      
+      // Calculate scroll position to center the active line
+      const scrollPosition = elementTop - (containerHeight / 2) + (elementHeight / 2);
+      
+      container.scrollTo({
+        top: scrollPosition,
         behavior: 'smooth',
-        block: 'center',
       });
     }
   }, [activeWordIndices]);
@@ -76,14 +87,16 @@ export function TranscriptPlayer({ audioRef, cues, currentTime }: TranscriptPlay
 
   return (
     <Box
+      ref={containerRef}
       sx={{
         maxHeight: { xs: 360, md: 420 },
         overflowY: 'auto',
         borderRadius: 2.5,
-        backgroundColor: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(140,130,255,0.08)',
-        px: { xs: 2, md: 3 },
-        py: { xs: 2, md: 3 },
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        px: { xs: 3, md: 4 },
+        py: { xs: 3, md: 4 },
+        scrollBehavior: 'smooth',
       }}
     >
       {cues.map((cue) => {
@@ -97,18 +110,25 @@ export function TranscriptPlayer({ audioRef, cues, currentTime }: TranscriptPlay
             ref={isCueActive ? activeCueRef : null}
             onClick={() => handleCueClick(cue)}
             sx={{
-              mb: 2,
-              px: 2,
-              py: 1.5,
-              borderRadius: 2,
+              mb: 2.5,
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              transition: 'opacity 0.2s ease',
               '&:hover': {
-                backgroundColor: 'rgba(140,130,255,0.06)',
+                opacity: 1,
               },
             }}
           >
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, lineHeight: 1.8 }}>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: 0.75,
+                lineHeight: 2,
+                fontFamily: '"Atkinson Hyperlegible", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                fontSize: { xs: '1.125rem', md: '1.25rem' },
+                letterSpacing: '0.01em',
+              }}
+            >
               {wordTimings.map((wordTiming, index) => {
                 const isActiveWord = isCueActive && index === activeWordIndex;
                 return (
@@ -121,20 +141,21 @@ export function TranscriptPlayer({ audioRef, cues, currentTime }: TranscriptPlay
                       handleWordClick(wordTiming);
                     }}
                     sx={{
-                      fontSize: { xs: '0.95rem', md: '1.05rem' },
-                      fontWeight: isActiveWord ? 600 : 400,
-                      color: isActiveWord ? 'primary.main' : 'text.primary',
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit',
+                      letterSpacing: 'inherit',
+                      fontWeight: 400,
+                      color: isActiveWord ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
                       backgroundColor: isActiveWord
-                        ? 'rgba(140,130,255,0.2)'
+                        ? 'rgba(255,255,255,0.03)'
                         : 'transparent',
-                      px: isActiveWord ? 0.75 : 0,
+                      px: isActiveWord ? 0.5 : 0,
                       py: isActiveWord ? 0.25 : 0,
-                      borderRadius: 1,
+                      borderRadius: 0.5,
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease',
+                      transition: 'color 0.2s ease, background-color 0.2s ease',
                       '&:hover': {
-                        color: 'primary.light',
-                        backgroundColor: 'rgba(140,130,255,0.12)',
+                        color: 'rgba(255,255,255,0.8)',
                       },
                     }}
                   >
