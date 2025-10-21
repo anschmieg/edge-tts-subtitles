@@ -1,4 +1,5 @@
 import { MOCK_PAYLOAD, resolveWorkerBaseUrl } from '../constants';
+import { MOCK_SUBTITLE_CONTENT, MOCK_AUDIO_BASE64 } from '../constants';
 
 export interface WorkerVoice {
   shortName: string;
@@ -61,23 +62,36 @@ export async function generateSpeechWithSubtitles(
       }, 1000);
     });
   }
+  try {
+    const baseUrl = await resolveWorkerBaseUrl();
+    const response = await fetch(`${baseUrl}/v1/audio/speech_subtitles`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
 
-  const baseUrl = await resolveWorkerBaseUrl();
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Worker API error: ${response.status} - ${errorText}`);
+    }
 
-  const response = await fetch(`${baseUrl}/v1/audio/speech_subtitles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Worker API error: ${response.status} - ${errorText}`);
+    return response.json();
+  } catch (err) {
+    // In development, when the worker is unreachable, fall back to a
+    // lightweight mock payload so the UI remains usable. Re-throw in
+    // production to surface failures.
+    // Detect dev by checking import.meta.env if available.
+    const isProd = typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.PROD);
+    if (isProd) throw err;
+    // Provide a minimal mock response so playback and downloads work.
+    return Promise.resolve({
+      audio_content_base64: MOCK_AUDIO_BASE64,
+      subtitle_format: 'srt',
+      subtitle_content: MOCK_SUBTITLE_CONTENT,
+    });
   }
-
-  return response.json();
 }
 
 /**
@@ -114,25 +128,43 @@ export function downloadSubtitle(content: string, format: 'srt' | 'vtt', filenam
 let voicesPromise: Promise<WorkerVoice[]> | null = null;
 
 async function fetchVoicesOnce(): Promise<WorkerVoice[]> {
-  const baseUrl = await resolveWorkerBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/voices`, {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
-  });
+  try {
+    const baseUrl = await resolveWorkerBaseUrl();
+    const response = await fetch(`${baseUrl}/v1/voices`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to load voices: ${response.status} - ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load voices: ${response.status} - ${errorText}`);
+    }
+
+    const payload = await response.json();
+    if (!payload || !Array.isArray(payload.voices)) {
+      throw new Error('Unexpected voice payload');
+    }
+
+    return payload.voices as WorkerVoice[];
+  } catch (err) {
+    const isProd = typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.PROD);
+    if (isProd) throw err;
+    // Development fallback: return an empty array or a tiny mock set so the
+    // UI doesn't break when the worker is not running locally.
+    return [
+      {
+        shortName: 'en-US-EmmaMultilingualNeural',
+        friendlyName: 'Emma (Multilingual)',
+        locale: 'en-US',
+        language: 'en',
+        gender: 'Female',
+        isMultilingual: true,
+        displayName: 'Emma',
+      },
+    ];
   }
-
-  const payload = await response.json();
-  if (!payload || !Array.isArray(payload.voices)) {
-    throw new Error('Unexpected voice payload');
-  }
-
-  return payload.voices as WorkerVoice[];
 }
 
 export async function fetchVoices(): Promise<WorkerVoice[]> {

@@ -85,9 +85,25 @@ export async function resolveWorkerBaseUrl(): Promise<string> {
 
   if (!resolvingWorkerBaseUrl) {
     resolvingWorkerBaseUrl = (async () => {
+      // Decide whether we are running in a production build or development.
+      // In production, always prefer the configured hosted worker and avoid
+      // probing local hosts. In development, prefer a local Wrangler dev
+      // server when reachable, otherwise fall back to the hosted worker.
+      const isProd = typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.PROD);
+
+      // If we're running a production build, prefer the hosted worker
+      // without attempting local probes. This avoids unnecessary latency
+      // and connection errors in production environments.
+      if (isProd) {
+        if (HOSTED_WORKER_FALLBACK) {
+          return HOSTED_WORKER_FALLBACK;
+        }
+        throw new Error('No hosted worker configured for production. Set VITE_WORKER_BASE_URL.');
+      }
+
       // Probe local Wrangler URLs only when running in a browser on a local
-      // host. Previously the SSR branch caused probes during server-side
-      // execution which is undesirable.
+      // host and in development. Previously the SSR branch caused probes
+      // during server-side execution which is undesirable.
       const shouldProbeLocal = typeof window !== 'undefined' && isLikelyLocal(window.location.hostname);
 
       if (shouldProbeLocal) {
@@ -102,10 +118,14 @@ export async function resolveWorkerBaseUrl(): Promise<string> {
           }
         }
       }
+
+      // Fall back to the hosted worker if configured.
       if (HOSTED_WORKER_FALLBACK) {
         return HOSTED_WORKER_FALLBACK;
       }
 
+      // If we have a non-local site origin (deployed site) use that as a
+      // fallback when possible.
       if (typeof window !== 'undefined') {
         try {
           const currentOrigin = window.location.origin;
