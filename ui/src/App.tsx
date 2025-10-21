@@ -813,19 +813,19 @@ function App() {
                   mx: 'auto',
                 }}
               >
-                  <CardContent
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      flex: 1,
-                      minHeight: 340, // ensure enough height for nav
-                      position: 'relative',
-                      px: { xs: 2.5, md: 4 },
-                      pt: { xs: 2.5, md: 3.5 },
-                      pb: 0, // remove extra bottom padding, let nav control spacing
-                      justifyContent: 'flex-start',
-                    }}
-                  >
+                <CardContent
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: 1,
+                    minHeight: 340, // ensure enough height for nav
+                    position: 'relative',
+                    px: { xs: 2.5, md: 4 },
+                    pt: { xs: 2.5, md: 3.5 },
+                    pb: 0, // remove extra bottom padding, let nav control spacing
+                    justifyContent: 'flex-start',
+                  }}
+                >
                   <Box
                     className="snap-card-scroll"
                     sx={{
