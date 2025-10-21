@@ -655,7 +655,8 @@ function App() {
         sx={{
           flexGrow: 1,
           minHeight: 0,
-          py: { xs: 5, md: 7 },
+          // slightly reduced vertical padding so short tabs don't show excess
+          py: { xs: 4, md: 6 },
           px: { xs: 1.5, md: 3 },
           display: 'flex',
           flexDirection: 'column',
@@ -698,8 +699,8 @@ function App() {
               scrollSnapType: 'y mandatory',
               scrollSnapStop: 'always',
               scrollPaddingTop: theme.spacing(3),
-              scrollPaddingBottom: theme.spacing(3),
-              pb: 6,
+              scrollPaddingBottom: theme.spacing(0.5), // further reduced bottom padding
+              pb: 0.5,
               px: { xs: 1.5, md: 0 },
               alignItems: 'stretch',
               scrollbarWidth: 'none',
@@ -807,36 +808,34 @@ function App() {
                 onSubmit={handleSubmit}
                 sx={{
                   borderRadius: 3,
-                  minHeight: { xs: '80vh', md: '72vh' },
                   width: '100%',
                   maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
                   mx: 'auto',
                 }}
               >
-                <CardContent
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: 1,
-                      minHeight: 0,
-                      // create a positioning context for the navigation so it can be
-                      // positioned absolutely within the card and never overlap inner scroll content
+                  <CardContent
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      flex: 1,
+                      minHeight: 340, // ensure enough height for nav
                       position: 'relative',
-                    px: { xs: 2.5, md: 4 },
-                    py: { xs: 3, md: 4 },
-                  }}
-                >
+                      px: { xs: 2.5, md: 4 },
+                      pt: { xs: 2.5, md: 3.5 },
+                      pb: 0, // remove extra bottom padding, let nav control spacing
+                      justifyContent: 'flex-start',
+                    }}
+                  >
                   <Box
                     className="snap-card-scroll"
                     sx={{
                       overflowY: 'auto',
                       overscrollBehavior: 'contain',
                       px: { xs: 1.5, md: 2 },
-                      // leave room for the sticky bottom navigation so it never overlaps content
-                      pb: { xs: 12, md: 14 },
+                      pb: 0, // remove bottom padding, nav will handle spacing
                       mx: { xs: -1.5, md: -2 },
-                      // ensure the scroll area can grow to fit larger content
-                      flex: 1,
+                      flex: '0 1 auto',
+                      minHeight: 0,
                     }}
                   >
                     <Stack
@@ -1189,24 +1188,19 @@ function App() {
                       )}
 
                     </Stack>
-                    {FLOW_TABS.includes(activeTab) && (
-                      // Place navigation inside the scrollable area so `position: sticky`
-                      // keeps it pinned to the bottom of the card content without
-                      // overlapping the inner elements.
-                      <Box sx={{ mt: 2 }}>
-                        <StepNavigation
-                          activeTab={activeTab}
-                          flowOrder={FLOW_TABS}
-                          onNavigate={changeTab}
-                          isGenerateDisabled={isGenerateDisabled}
-                          loading={loading}
-                          error={error}
-                          onClearError={() => setError('')}
-                          labelResolver={getTabLabel}
-                        />
-                      </Box>
-                    )}
                   </Box>
+                  {FLOW_TABS.includes(activeTab) && (
+                    <StepNavigation
+                      activeTab={activeTab}
+                      flowOrder={FLOW_TABS}
+                      onNavigate={changeTab}
+                      isGenerateDisabled={isGenerateDisabled}
+                      loading={loading}
+                      error={error}
+                      onClearError={() => setError('')}
+                      labelResolver={getTabLabel}
+                    />
+                  )}
                 </CardContent>
               </Card>
             </SnapSection>
@@ -1231,7 +1225,6 @@ function App() {
                     borderRadius: 3,
                     display: 'flex',
                     flexDirection: 'column',
-                    minHeight: { xs: '80vh', md: '72vh' },
                     width: '100%',
                     maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
                     mx: 'auto',
@@ -1241,7 +1234,7 @@ function App() {
                   <CardContent
                     className="snap-card-scroll"
                     sx={{
-                      flex: 1,
+                      flex: '0 1 auto',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
@@ -1250,6 +1243,7 @@ function App() {
                       overscrollBehavior: 'contain',
                       px: { xs: 3, md: 4 },
                       py: { xs: 4, md: 5 },
+                      minHeight: 0,
                     }}
                   >
                     <Stack spacing={2} alignItems="center">
@@ -1303,26 +1297,24 @@ function StepNavigation({
   return (
     <Box
       sx={{
-        // make the navigation sticky and part of the normal flow but pinned
-        // to the bottom of the scroll container so content is never hidden
         position: 'sticky',
         left: 0,
         right: 0,
         bottom: 0,
         zIndex: 6,
-        borderRadius: 3,
+        borderRadius: 8,
         border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
         background: `linear-gradient(180deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(
           theme.palette.background.paper,
-          0.9
+          0.94
         )})`,
-        backdropFilter: 'blur(8px)',
-        px: { xs: 2, md: 3 },
-        py: { xs: 1.25, md: 1.8 },
-        boxShadow: '0 10px 26px rgba(6,10,28,0.24)',
-        // ensure the element sits above the inner content but below any modal
-        // overlays
+        backdropFilter: 'blur(6px)',
+        px: { xs: 1.5, md: 2.5 },
+        py: { xs: 1, md: 1.25 },
+        boxShadow: '0 8px 20px rgba(6,10,28,0.18)',
         transform: 'translateZ(0)',
+        width: '100%',
+        mt: 3, // consistent margin above nav for all tabs
       }}
     >
       <Stack spacing={2}>
@@ -1519,7 +1511,7 @@ function ResultPanelPlaceholder() {
         borderRadius: 3,
         display: 'flex',
         flexDirection: 'column',
-        minHeight: { xs: '80vh', md: '72vh' },
+        minHeight: { xs: '72vh', md: '66vh' },
         width: '100%',
         maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
         mx: 'auto',

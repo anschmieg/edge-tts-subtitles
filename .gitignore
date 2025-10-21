@@ -175,3 +175,4 @@ tmp_*
 .project/
 
 .playwright-mcp/
+**/tmp/
