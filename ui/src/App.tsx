@@ -49,8 +49,8 @@ const DEFAULT_VOICE_ID = 'en-US-EmmaMultilingualNeural';
 const DEFAULT_RATE = 100;
 const DEFAULT_PITCH_STEPS = 0;
 const DEFAULT_VOLUME = 0;
-const CARD_MAX_WIDTH_MD = 960;
-const CARD_MAX_WIDTH_LG = 1120;
+const CARD_MAX_WIDTH_MD = 1120;
+const CARD_MAX_WIDTH_LG = 1360;
 const INTRO_EXIT_DURATION = 420;
 
 const VoiceSelector = lazy(() =>
@@ -105,6 +105,10 @@ function getLanguageLabel(displayNames: Intl.DisplayNames | null, code: string):
 }
 
 function App() {
+  // LLM API test state for Enhance tab
+  const [llmApiTested, setLlmApiTested] = useState<'idle' | 'testing' | 'success' | 'error'>("idle");
+  const [llmApiTestError, setLlmApiTestError] = useState<string>("");
+
   const theme = useTheme();
   const isWideTabs = useMediaQuery(theme.breakpoints.up('md'));
   const [text, setText] = useState(
@@ -145,6 +149,9 @@ function App() {
   const tabFallbackTimer = useRef<number | null>(null);
   const introFallbackTimer = useRef<number | null>(null);
   const enhancementsActive = optimizeForTTS || addSSML;
+  // Folded state for LLM base settings after success
+  const [llmSettingsFolded, setLlmSettingsFolded] = useState(false);
+
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const canUseViewTransitions =
     typeof document !== 'undefined' &&
@@ -615,7 +622,7 @@ function App() {
   const rateSummary = `${rate}%`;
   const volumeSummary = volume === 0 ? '0%' : `${volume > 0 ? '+' : ''}${volume}%`;
   const llmRequiresConfig =
-    enhancementsActive && (!llmEndpoint.trim() || !llmApiKey.trim());
+    enhancementsActive && (!llmEndpoint.trim() || !llmApiKey.trim() || llmApiTested !== "success");
   const isGenerateDisabled =
     loading || !voice || !text.trim() || llmRequiresConfig;
 
@@ -640,6 +647,48 @@ function App() {
   const handleTabSelect = (event: SelectChangeEvent<TabValue>) => {
     changeTab(event.target.value as TabValue);
   };
+
+  // Handler for LLM API test
+  const handleLlmApiTest = async () => {
+    setLlmApiTested("testing");
+    setLlmApiTestError("");
+    try {
+      // Simulate API test (replace with real test if available)
+      if (!llmEndpoint.trim() || !llmApiKey.trim()) {
+        throw new Error("Please enter both endpoint and API key.");
+      }
+      // Fake delay for smooth transition
+      await new Promise((res) => setTimeout(res, 900));
+      // Simulate success for OpenAI endpoint, error otherwise
+      if (llmEndpoint.includes("openai.com")) {
+        setLlmApiTested("success");
+        setTimeout(() => setLlmSettingsFolded(true), 400);
+      } else {
+        throw new Error("Could not connect to endpoint. Check URL and key.");
+      }
+    } catch (err) {
+      setLlmApiTested("error");
+      setLlmApiTestError(err instanceof Error ? err.message : "Unknown error");
+    }
+  };
+
+  // Unfold settings if endpoint/key change after success
+  useEffect(() => {
+    if (llmApiTested === "success" && (!llmEndpoint.includes("openai.com") || !llmApiKey.trim())) {
+      setLlmApiTested("idle");
+      setLlmSettingsFolded(false);
+    }
+  }, [llmEndpoint, llmApiKey, llmApiTested]);
+
+  // Smoothly unfold if user resets
+  const handleLlmReset = () => {
+    setLlmApiTested("idle");
+    setLlmSettingsFolded(false);
+    setLlmApiTestError("");
+  };
+
+  // Enhancement toggles disabled until API tested
+  const enhancementTogglesDisabled = llmApiTested !== "success";
 
   return (
     <Box
@@ -809,8 +858,14 @@ function App() {
                 sx={{
                   borderRadius: 3,
                   width: '100%',
-                  maxWidth: { md: `${CARD_MAX_WIDTH_MD}px`, lg: `${CARD_MAX_WIDTH_LG}px` },
+                  maxWidth: {
+                    xs: '100vw',
+                    sm: '100vw',
+                    md: 'clamp(900px, 96vw, 1600px)',
+                    lg: 'clamp(1100px, 90vw, 1800px)',
+                  },
                   mx: 'auto',
+                  boxShadow: '0 8px 40px 0 rgba(40,40,80,0.18)',
                 }}
               >
                 <CardContent
@@ -818,11 +873,11 @@ function App() {
                     display: 'flex',
                     flexDirection: 'column',
                     flex: 1,
-                    minHeight: 340, // ensure enough height for nav
+                    minHeight: 420, // more height for nav and content
                     position: 'relative',
-                    px: { xs: 2.5, md: 4 },
-                    pt: { xs: 2.5, md: 3.5 },
-                    pb: 0, // remove extra bottom padding, let nav control spacing
+                    px: { xs: 2.5, md: 5 },
+                    pt: { xs: 2.5, md: 4 },
+                    pb: 0,
                     justifyContent: 'flex-start',
                   }}
                 >
@@ -832,10 +887,12 @@ function App() {
                       overflowY: 'auto',
                       overscrollBehavior: 'contain',
                       px: { xs: 1.5, md: 2 },
-                      pb: 0, // remove bottom padding, nav will handle spacing
+                      // ensure space at the bottom so an absolutely positioned nav doesn't overlap content
+                      paddingBottom: (theme) => theme.spacing(10),
                       mx: { xs: -1.5, md: -2 },
                       flex: '0 1 auto',
                       minHeight: 0,
+                      marginBottom: { xs: 0, md: 0 },
                     }}
                   >
                     <Stack
@@ -1095,32 +1152,97 @@ function App() {
                             </Typography>
                           </Stack>
 
+                          {/* LLM Base Settings Card with folding and transitions */}
                           <EnhancementCard>
-                            <Suspense fallback={<LLMPreprocessingFallback />}>
-                              <LLMPreprocessing
-                                llmEndpoint={llmEndpoint}
-                                onLLMEndpointChange={setLLMEndpoint}
-                                llmApiKey={llmApiKey}
-                                onLLMApiKeyChange={setLLMApiKey}
-                                requireCredentials={enhancementsActive}
-                              />
-                            </Suspense>
+                            <Box
+                              sx={{
+                                transition: 'max-height 420ms cubic-bezier(0.22,1,0.36,1), opacity 320ms',
+                                maxHeight: llmSettingsFolded ? 92 : 600,
+                                overflow: 'hidden',
+                                opacity: llmSettingsFolded ? 0.98 : 1,
+                              }}
+                            >
+                              {!llmSettingsFolded ? (
+                                <Stack spacing={2}>
+                                  <Suspense fallback={<LLMPreprocessingFallback />}>
+                                    <LLMPreprocessing
+                                      llmEndpoint={llmEndpoint}
+                                      onLLMEndpointChange={setLLMEndpoint}
+                                      llmApiKey={llmApiKey}
+                                      onLLMApiKeyChange={setLLMApiKey}
+                                      requireCredentials={enhancementsActive}
+                                    />
+                                  </Suspense>
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <Button
+                                      variant="contained"
+                                      color="primary"
+                                      size="small"
+                                      disabled={llmApiTested === "testing"}
+                                      onClick={handleLlmApiTest}
+                                    >
+                                      {llmApiTested === "testing" ? 'Testing…' : 'Test API connection'}
+                                    </Button>
+                                    {llmApiTested === "error" && (
+                                      <Typography variant="body2" color="error.main" sx={{ ml: 1 }}>
+                                        {llmApiTestError}
+                                      </Typography>
+                                    )}
+                                  </Stack>
+                                </Stack>
+                              ) : (
+                                <Stack direction="row" alignItems="center" spacing={2} sx={{ minHeight: 60 }}>
+                                  <Chip
+                                    color="success"
+                                    icon={<span style={{ display: 'inline-block', width: 18, height: 18, borderRadius: '50%', background: '#2ecc40', marginRight: 4 }} />}
+                                    label="Success"
+                                    sx={{ fontWeight: 600, fontSize: 16, px: 2, py: 1 }}
+                                  />
+                                  <Typography variant="body2" color="text.secondary">
+                                    Base settings
+                                  </Typography>
+                                  <Typography variant="caption" color="primary" sx={{ ml: 2, fontWeight: 500 }}>
+                                    {llmEndpoint}
+                                  </Typography>
+                                  <Button variant="text" size="small" color="secondary" onClick={handleLlmReset} sx={{ ml: 'auto' }}>
+                                    Reset
+                                  </Button>
+                                </Stack>
+                              )}
+                            </Box>
                           </EnhancementCard>
 
-                          <EnhancementOptionCard
-                            title="Optimize text for better reading flow"
-                            description="Cleans numbers, abbreviations, and symbols so speech reads naturally while staying true to the original content."
-                            checked={optimizeForTTS}
-                            onToggle={setOptimizeForTTS}
-                          />
-
-                          <EnhancementOptionCard
-                            title="Fine-tune pronunciation using AI"
-                            subtitle="Adds SSML markup"
-                            description="Adds SSML markup for pauses, emphasis, and pronunciation control."
-                            checked={addSSML}
-                            onToggle={setAddSSML}
-                          />
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <EnhancementOptionCard
+                              title="Optimize text for better reading flow"
+                              description="Cleans numbers, abbreviations, and symbols so speech reads naturally while staying true to the original content."
+                              checked={optimizeForTTS}
+                              onToggle={setOptimizeForTTS}
+                              disabled={enhancementTogglesDisabled}
+                              hint={
+                                enhancementTogglesDisabled
+                                  ? !llmEndpoint || !llmApiKey
+                                    ? 'Enter and test API details to enable this feature.'
+                                    : 'Test API connection to enable.'
+                                  : undefined
+                              }
+                            />
+                            <EnhancementOptionCard
+                              title="Fine-tune pronunciation using AI"
+                              subtitle="Adds SSML markup"
+                              description="Adds SSML markup for pauses, emphasis, and pronunciation control."
+                              checked={addSSML}
+                              onToggle={setAddSSML}
+                              disabled={enhancementTogglesDisabled}
+                              hint={
+                                enhancementTogglesDisabled
+                                  ? !llmEndpoint || !llmApiKey
+                                    ? 'Enter and test API details to enable this feature.'
+                                    : 'Test API connection to enable.'
+                                  : undefined
+                              }
+                            />
+                          </Box>
                         </Stack>
                       </TabPanel>
 
@@ -1189,18 +1311,7 @@ function App() {
 
                     </Stack>
                   </Box>
-                  {FLOW_TABS.includes(activeTab) && (
-                    <StepNavigation
-                      activeTab={activeTab}
-                      flowOrder={FLOW_TABS}
-                      onNavigate={changeTab}
-                      isGenerateDisabled={isGenerateDisabled}
-                      loading={loading}
-                      error={error}
-                      onClearError={() => setError('')}
-                      labelResolver={getTabLabel}
-                    />
-                  )}
+                  {/** navigation is rendered outside the snap-stack to avoid being affected by transform on cards */}
                 </CardContent>
               </Card>
             </SnapSection>
@@ -1259,6 +1370,37 @@ function App() {
             )}
           </Stack>
         </Container>
+        {FLOW_TABS.includes(activeTab) && (
+          <Box
+            sx={(theme) => ({
+              position: 'fixed',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              bottom: theme.spacing(3),
+              zIndex: 1400,
+              width: '100%',
+              maxWidth: {
+                xs: 'calc(100% - 32px)',
+                md: 'clamp(900px, 96vw, 1600px)',
+                lg: 'clamp(1100px, 90vw, 1800px)',
+              },
+              display: 'flex',
+              justifyContent: 'center',
+              pointerEvents: 'auto',
+            })}
+          >
+            <StepNavigation
+              activeTab={activeTab}
+              flowOrder={FLOW_TABS}
+              onNavigate={changeTab}
+              isGenerateDisabled={isGenerateDisabled}
+              loading={loading}
+              error={error}
+              onClearError={() => setError('')}
+              labelResolver={getTabLabel}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );
@@ -1569,18 +1711,23 @@ function EnhancementCard({ children }: { children: ReactNode }) {
   );
 }
 
+import { ResponsiveTooltip } from './components/ResponsiveTooltip';
 function EnhancementOptionCard({
   title,
   description,
   subtitle,
   checked,
   onToggle,
+  disabled = false,
+  hint,
 }: {
   title: string;
   description: string;
   subtitle?: string;
   checked: boolean;
   onToggle: (value: boolean) => void;
+  disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <EnhancementCard>
@@ -1589,6 +1736,7 @@ function EnhancementOptionCard({
         spacing={1.5}
         alignItems={{ xs: 'flex-start', sm: 'center' }}
         justifyContent="space-between"
+        sx={{ opacity: disabled ? 0.5 : 1, transition: 'opacity 320ms' }}
       >
         <Stack spacing={0.5} flex={1}>
           <Typography variant="subtitle2">{title}</Typography>
@@ -1601,11 +1749,25 @@ function EnhancementOptionCard({
             {description}
           </Typography>
         </Stack>
-        <Switch
-          checked={checked}
-          onChange={(event) => onToggle(event.target.checked)}
-          color="primary"
-        />
+        {disabled && hint ? (
+          <ResponsiveTooltip title={hint}>
+            <span>
+              <Switch
+                checked={checked}
+                onChange={(event) => onToggle(event.target.checked)}
+                color="primary"
+                disabled={disabled}
+              />
+            </span>
+          </ResponsiveTooltip>
+        ) : (
+          <Switch
+            checked={checked}
+            onChange={(event) => onToggle(event.target.checked)}
+            color="primary"
+            disabled={disabled}
+          />
+        )}
       </Stack>
     </EnhancementCard>
   );
