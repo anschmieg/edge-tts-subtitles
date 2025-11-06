@@ -1,0 +1,5 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "pages_build_output_dir": "ui/dist",
+  "compatibility_date": "2025-10-11"
+}

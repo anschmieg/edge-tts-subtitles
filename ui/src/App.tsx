@@ -723,14 +723,16 @@ function App() {
             overflow: 'hidden',
           }}
         >
-          <Stack spacing={0.6} sx={{ mb: { xs: 3, md: 4 }, px: { xs: 1.5, md: 0 } }}>
-            <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
-              Edge TTS Studio
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Generate natural speech with synced subtitles in a few guided steps.
-            </Typography>
-          </Stack>
+          {!introRemoved && (
+            <Stack spacing={0.6} sx={{ mb: { xs: 3, md: 4 }, px: { xs: 1.5, md: 0 } }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
+                Edge TTS Studio
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Generate natural speech with synced subtitles in a few guided steps.
+              </Typography>
+            </Stack>
+          )}
 
           <Stack
             className="snap-stack"
@@ -748,7 +750,8 @@ function App() {
               scrollSnapType: 'y mandatory',
               scrollSnapStop: 'always',
               scrollPaddingTop: theme.spacing(3),
-              scrollPaddingBottom: theme.spacing(0.5), // further reduced bottom padding
+              // reserve extra bottom padding so snap-scrolling doesn't hide card content under the fixed nav
+              scrollPaddingBottom: theme.spacing(12),
               pb: 0.5,
               px: { xs: 1.5, md: 0 },
               alignItems: 'stretch',
@@ -763,6 +766,11 @@ function App() {
               },
               '& > .snap-section:first-of-type': {
                 marginTop: 0,
+              },
+              // ensure every section ends with a small anchor so scroll-snap will stop before the fixed nav
+              '& .snap-end-anchor': {
+                height: theme.spacing(12),
+                flex: '0 0 auto',
               },
             })}
           >
@@ -873,7 +881,7 @@ function App() {
                     display: 'flex',
                     flexDirection: 'column',
                     flex: 1,
-                    minHeight: 420, // more height for nav and content
+                    minHeight: 340, // reduced min height to avoid overly tall cards
                     position: 'relative',
                     px: { xs: 2.5, md: 5 },
                     pt: { xs: 2.5, md: 4 },
@@ -1372,6 +1380,7 @@ function App() {
         </Container>
         {FLOW_TABS.includes(activeTab) && (
           <Box
+            data-testid="step-navigation"
             sx={(theme) => ({
               position: 'fixed',
               left: '50%',
@@ -1451,7 +1460,8 @@ function StepNavigation({
           0.94
         )})`,
         backdropFilter: 'blur(6px)',
-        px: { xs: 1.5, md: 2.5 },
+        // increase horizontal padding so text isn't crammed at the rounded ends
+        px: { xs: 2.5, md: 4 },
         py: { xs: 1, md: 1.25 },
         boxShadow: '0 8px 20px rgba(6,10,28,0.18)',
         transform: 'translateZ(0)',

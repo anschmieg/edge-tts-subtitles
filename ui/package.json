@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:pages": "npm ci --no-audit --no-fund && npm run build && npx --yes wrangler pages deploy dist --project-name tts-sub --branch main --commit-dirty"
   },
   "dependencies": {
     "@emotion/react": "^11.13.5",

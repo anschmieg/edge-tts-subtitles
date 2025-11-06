@@ -337,23 +337,23 @@ function VoiceSelectorComponent({
                     <ListItem
                       key={voice.shortName}
                       disablePadding
-                    secondaryAction={
-                      <Tooltip title={isPlaying ? 'Stop preview' : 'Play sample'} arrow>
-                        <Button
-                          variant="contained"
-                          color={isPlaying ? 'primary' : 'secondary'}
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handlePreview(voice);
-                          }}
-                          startIcon={isPlaying ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
-                          sx={{ borderRadius: 999, px: 2 }}
-                        >
-                          {isPlaying ? 'Stop' : 'Play'}
-                        </Button>
-                      </Tooltip>
-                    }
+                      secondaryAction={
+                        <Tooltip title={isPlaying ? 'Stop preview' : 'Play sample'} arrow>
+                          <Button
+                            variant="contained"
+                            color={isPlaying ? 'primary' : 'secondary'}
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handlePreview(voice);
+                            }}
+                            startIcon={isPlaying ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
+                            sx={{ borderRadius: 999, px: 2 }}
+                          >
+                            {isPlaying ? 'Stop' : 'Play'}
+                          </Button>
+                        </Tooltip>
+                      }
                     >
                       <ListItemButton
                         onClick={() => onVoiceChange(voice.shortName)}
@@ -406,16 +406,7 @@ function VoiceSelectorComponent({
         </Typography>
       )}
 
-      {selectedVoiceMeta && (
-        <Box sx={{ borderRadius: 2, border: '1px solid rgba(140,130,255,0.12)', p: 2 }}>
-          <Typography variant="subtitle2">
-            {formatSelectedVoiceLabel(selectedVoiceMeta, languageFormatter ?? undefined)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Voice ID: {selectedVoiceMeta.shortName}
-          </Typography>
-        </Box>
-      )}
+      {/* selected voice summary intentionally shown at the top as a SelectedVoiceCard; avoid repeating it here */}
     </Stack>
   );
 }

@@ -176,3 +176,7 @@ tmp_*
 
 .playwright-mcp/
 **/tmp/
+
+# System
+.DS_Store
+Thumbs.db

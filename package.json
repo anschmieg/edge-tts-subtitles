@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
+    "deploy:worker": "wrangler deploy",
+    "deploy:ui": "cd ui && npm ci --no-audit --no-fund && npm run build && npx --yes wrangler pages deploy dist --project-name tts-sub --branch main --commit-dirty",
+    "deploy:all": "npm run deploy:worker && npm run deploy:ui",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "cf-typegen": "wrangler types"

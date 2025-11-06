@@ -170,15 +170,44 @@ function mapVolume(volume?: string): string | undefined {
 	return undefined;
 }
 
-function handleOptions(): Response {
-	return new Response(null, {
-		status: 204,
-		headers: {
-			'Access-Control-Allow-Origin': '*',
-			'Access-Control-Allow-Methods': 'POST, OPTIONS',
+function parseAllowedOrigins(env: any): string[] {
+	const raw = env && env.ALLOWED_ORIGINS;
+	if (raw && typeof raw === 'string') {
+		return raw.split(',').map((s) => s.trim()).filter(Boolean);
+	}
+	// sensible defaults: production Pages and the worker host plus localhost for local dev
+	return [
+		'https://tts-sub.pages.dev',
+		'https://edge-tts-subtitles.s-x.workers.dev',
+		'http://localhost:8787',
+		'http://127.0.0.1:8787',
+	];
+}
+
+function corsHeadersForOrigin(origin: string | null, env: any) {
+	const allowed = parseAllowedOrigins(env);
+	if (!origin) return null;
+	if (allowed.includes(origin)) {
+		return {
+			'Access-Control-Allow-Origin': origin,
+			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 			'Access-Control-Allow-Headers': 'Content-Type',
-		},
-	});
+			// Cache preflight for 24 hours
+			'Access-Control-Max-Age': '86400',
+		} as Record<string, string>;
+	}
+	// Explicitly deny by returning null (clients will get no ACAO header)
+	return null;
+}
+
+function handleOptions(origin: string | null, env: any): Response {
+	const headers = corsHeadersForOrigin(origin, env) || {
+		'Access-Control-Allow-Origin': 'null',
+		'Access-Control-Allow-Methods': 'POST, OPTIONS',
+		'Access-Control-Allow-Headers': 'Content-Type',
+		'Access-Control-Max-Age': '0',
+	};
+	return new Response(null, { status: 204, headers });
 }
 
 type VoiceSummary = {
@@ -237,13 +266,11 @@ async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		if (request.method === 'OPTIONS') {
-			return handleOptions();
+			return handleOptions(request.headers.get('Origin'), env);
 		}
 
 		const url = new URL(request.url);
-		const corsHeaders = {
-			'Access-Control-Allow-Origin': '*',
-		};
+		const corsHeaders = corsHeadersForOrigin(request.headers.get('Origin'), env) || { 'Access-Control-Allow-Origin': 'null' };
 
 		try {
 			switch (url.pathname) {
