@@ -15,7 +15,33 @@ A high-performance Cloudflare Worker that provides free, high-quality Text-to-Sp
 
 ## API Endpoints
 
-### 1. `/v1/audio/speech` - OpenAI-Compatible
+### 1. `/v1/voices` - List Available Voices
+
+Returns a JSON array of all available TTS voices.
+
+```bash
+curl -X GET http://edge-tts-subtitles.s-x.workers.dev/v1/voices \
+  -H "Content-Type: application/json"
+```
+
+**Response:**
+```json
+{
+  "voices": [
+    {
+      "shortName": "en-US-EmmaMultilingualNeural",
+      "friendlyName": "Microsoft Emma Online (Natural) - English (United States)",
+      "locale": "en-US",
+      "language": "en",
+      "gender": "Female",
+      "isMultilingual": true,
+      "displayName": "Microsoft Emma Online (Natural) - English (United States) (en-US)"
+    }
+  ]
+}
+```
+
+### 2. `/v1/audio/speech` - OpenAI-Compatible
 
 Returns raw MP3 audio data.
 
@@ -26,7 +52,7 @@ curl -X POST http://edge-tts-subtitles.s-x.workers.dev/v1/audio/speech \
   --output output.mp3
 ```
 
-### 2. `/v1/audio/speech_subtitles` - With Subtitles
+### 3. `/v1/audio/speech_subtitles` - With Subtitles
 
 Returns JSON with base64-encoded audio and synchronized subtitles.
 
@@ -52,6 +78,13 @@ curl -X POST http://edge-tts-subtitles.s-x.workers.dev/v1/audio/speech_subtitles
   "subtitle_content": "WEBVTT subtitle content"
 }
 ```
+
+### Utility Endpoints
+
+- `GET /__health` - Health check endpoint (returns 204 No Content)
+- `GET /__debug` - CORS debugging information
+- `GET /openapi.json` - OpenAPI 3.0 specification
+- `GET /docs` - Interactive API documentation (Swagger UI)
 
 See the `docs/` folder for focused documentation. Start at `docs/index.md`.
 

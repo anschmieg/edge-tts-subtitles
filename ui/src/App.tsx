@@ -464,6 +464,8 @@ function App() {
   const tabLabelMap = useMemo(() => new Map(tabItems.map((item) => [item.value, item.label])), [tabItems]);
   const getTabLabel = useCallback((tab: TabValue) => tabLabelMap.get(tab) ?? tab, [tabLabelMap]);
 
+  const FORM_ID = 'tts-generate-form';
+
   const startTabTransition = useCallback(
     (commit: () => void) => {
       if (canUseViewTransitions) {
@@ -862,6 +864,7 @@ function App() {
               <Card
                 className="snap-card"
                 component="form"
+                id={FORM_ID}
                 onSubmit={handleSubmit}
                 sx={{
                   borderRadius: 3,
@@ -1407,6 +1410,7 @@ function App() {
               error={error}
               onClearError={() => setError('')}
               labelResolver={getTabLabel}
+              formId={FORM_ID}
             />
           </Box>
         )}
@@ -1426,6 +1430,7 @@ function StepNavigation({
   error,
   onClearError,
   labelResolver,
+  formId,
 }: {
   activeTab: TabValue;
   flowOrder: TabValue[];
@@ -1435,6 +1440,7 @@ function StepNavigation({
   error: string;
   onClearError: () => void;
   labelResolver: (tab: TabValue) => string;
+  formId?: string;
 }) {
   const theme = useTheme();
   const currentIndex = flowOrder.indexOf(activeTab);
@@ -1522,6 +1528,7 @@ function StepNavigation({
             )}
             <Button
               type="submit"
+              form={formId}
               variant="contained"
               disabled={isGenerateDisabled}
               startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}

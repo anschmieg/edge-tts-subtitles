@@ -6,6 +6,44 @@ export const openApiSpec = {
     description: 'Text-to-Speech endpoints with subtitle generation and prosody controls. LLM preprocessing is available client-side in the demo UI.',
   },
   paths: {
+    '/v1/voices': {
+      get: {
+        summary: 'List all available voices',
+        description: 'Returns a list of all available text-to-speech voices with their properties including language, locale, gender, and display names.',
+        responses: {
+          '200': {
+            description: 'List of voices',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    voices: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          shortName: { type: 'string', description: 'Short name identifier for the voice' },
+                          friendlyName: { type: 'string', description: 'Human-readable friendly name' },
+                          locale: { type: 'string', description: 'Locale code (e.g., en-US)' },
+                          language: { type: 'string', description: 'Language code (e.g., en)' },
+                          gender: { type: 'string', enum: ['Male', 'Female'], description: 'Voice gender' },
+                          isMultilingual: { type: 'boolean', description: 'Whether the voice supports multiple languages' },
+                          displayName: { type: 'string', description: 'Formatted display name with locale' },
+                        },
+                        required: ['shortName', 'friendlyName', 'locale', 'language', 'gender', 'isMultilingual', 'displayName'],
+                      },
+                    },
+                  },
+                  required: ['voices'],
+                },
+              },
+            },
+          },
+          '500': { description: 'Internal Server Error' },
+        },
+      },
+    },
     '/v1/audio/speech': {
       post: {
         summary: 'Synthesize speech (raw audio)',

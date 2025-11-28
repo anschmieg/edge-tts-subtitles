@@ -61,7 +61,39 @@ curl -X POST "$WORKER_URL/v1/audio/speech" \
   -w "\nHTTP Status: %{http_code}\n"
 
 echo ""
-echo "=== Test 5: CORS preflight ==="
+echo "=== Test 5: /v1/voices (list available voices) ==="
+curl -X GET "$WORKER_URL/v1/voices" \
+  -H "Content-Type: application/json" \
+  -w "\nHTTP Status: %{http_code}\nTime: %{time_total}s\n" \
+  | jq '{ voice_count: (.voices | length), sample_voice: .voices[0] }'
+
+echo ""
+echo "=== Test 6: /v1/voices (list available voices) ==="
+curl -X GET "$WORKER_URL/v1/voices" \
+  -H "Content-Type: application/json" \
+  -w "\nHTTP Status: %{http_code}\nTime: %{time_total}s\n" \
+  | jq '{ voice_count: (.voices | length), sample_voice: .voices[0] }'
+
+echo ""
+echo "=== Test 7: Health check endpoint ==="
+curl -X GET "$WORKER_URL/__health" \
+  -w "HTTP Status: %{http_code}\n"
+
+echo ""
+echo "=== Test 8: CORS debug endpoint ==="
+curl -X GET "$WORKER_URL/__debug" \
+  -H "Content-Type: application/json" \
+  -w "HTTP Status: %{http_code}\n" \
+  | jq '.allowed'
+
+echo ""
+echo "=== Test 9: OpenAPI spec endpoint ==="
+curl -X GET "$WORKER_URL/openapi.json" \
+  -w "HTTP Status: %{http_code}\n" \
+  --silent | jq '.info.title'
+
+echo ""
+echo "=== Test 10: CORS preflight ==="
 curl -X OPTIONS "$WORKER_URL/v1/audio/speech" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: Content-Type" \

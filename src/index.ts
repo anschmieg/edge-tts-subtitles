@@ -4,7 +4,7 @@ import { demoHtml } from './demo';
 import { openApiSpec } from './openapi.json';
 import { swaggerHtml } from './swagger-ui';
 import { validateRawSsml, stripSsmlTags, ssmlToPlainText } from './lib/ssmlServer';
-import type { Voice } from 'edge-tts-universal/dist/index';
+import type { Voice } from 'edge-tts-universal/isomorphic';
 
 /**
  * Helper function to convert ArrayBuffer to Base64
@@ -184,19 +184,64 @@ function parseAllowedOrigins(env: any): string[] {
 	];
 }
 
+function originMatchesPattern(originUrl: URL, pattern: string): boolean {
+	// pattern can be a full origin (with protocol) or a host pattern like '*.pages.dev' or 'tts-sub.pages.dev'
+	try {
+		const p = pattern.trim();
+		if (!p) return false;
+		// If pattern looks like a full origin (has protocol), compare origin exactly or with wildcard host
+		if (/^https?:\/\//i.test(p)) {
+			const parsed = new URL(p);
+			// exact match
+			if (parsed.protocol === originUrl.protocol && parsed.host === originUrl.host) return true;
+			// allow wildcard in hostname if pattern host starts with '*.'
+			if (parsed.host.startsWith('*.')) {
+				const suffix = parsed.host.slice(2);
+				return originUrl.hostname === suffix || originUrl.hostname.endsWith('.' + suffix);
+			}
+			return false;
+		}
+
+		// Otherwise treat pattern as a host pattern
+		if (p.startsWith('*.')) {
+			const suffix = p.slice(2);
+			return originUrl.hostname === suffix || originUrl.hostname.endsWith('.' + suffix);
+		}
+
+		// direct host match
+		if (originUrl.hostname === p) return true;
+
+		// allow direct host with port (p may include port)
+		if (originUrl.host === p) return true;
+
+		return false;
+	} catch (e) {
+		return false;
+	}
+}
+
 function corsHeadersForOrigin(origin: string | null, env: any) {
 	const allowed = parseAllowedOrigins(env);
 	if (!origin) return null;
-	if (allowed.includes(origin)) {
-		return {
-			'Access-Control-Allow-Origin': origin,
-			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-			'Access-Control-Allow-Headers': 'Content-Type',
-			// Cache preflight for 24 hours
-			'Access-Control-Max-Age': '86400',
-		} as Record<string, string>;
+	let originUrl: URL;
+	try {
+		originUrl = new URL(origin);
+	} catch (e) {
+		return null;
 	}
-	// Explicitly deny by returning null (clients will get no ACAO header)
+
+	for (const pattern of allowed) {
+		if (originMatchesPattern(originUrl, pattern)) {
+			return {
+				'Access-Control-Allow-Origin': origin,
+				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type',
+				// Make these CORS headers readable from page JS for debugging/visibility
+				'Access-Control-Expose-Headers': 'Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers',
+				'Access-Control-Max-Age': '86400',
+			} as Record<string, string>;
+		}
+	}
 	return null;
 }
 
@@ -271,6 +316,19 @@ export default {
 
 		const url = new URL(request.url);
 		const corsHeaders = corsHeadersForOrigin(request.headers.get('Origin'), env) || { 'Access-Control-Allow-Origin': 'null' };
+
+		// Temporary debug endpoint: returns the request Origin header, the CORS
+		// headers computed for that origin, and the configured allowlist. This
+		// helps diagnose why some browsers may still see CORS errors.
+		if (url.pathname === '/__debug') {
+			const originHeader = request.headers.get('Origin');
+			const computed = corsHeadersForOrigin(originHeader, env) || null;
+			const allowed = parseAllowedOrigins(env);
+			return new Response(JSON.stringify({ originHeader, computed, allowed }), {
+				status: 200,
+				headers: { ...(computed || { 'Access-Control-Allow-Origin': 'null' }), 'Content-Type': 'application/json' },
+			});
+		}
 
 		try {
 			switch (url.pathname) {
@@ -445,6 +503,8 @@ export default {
 							subtitleContentText = undefined;
 						}
 					}
+
+
 
 					if (debugEnabled) {
 						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
