@@ -87,7 +87,7 @@ function VoiceSelectorComponent({
   }, [audioElement, audioUrl]);
 
   useEffect(() => {
-    if (playingVoice && !voices.some((v) => v.shortName === playingVoice)) {
+    if (playingVoice && !voices.some((v) => v.id === playingVoice)) {
       stopPlayback();
     }
   }, [voices, playingVoice]);
@@ -101,9 +101,9 @@ function VoiceSelectorComponent({
       const normalized = query.trim().toLowerCase();
       list = list.filter((voice) => {
         return (
-          voice.friendlyName.toLowerCase().includes(normalized) ||
-          voice.shortName.toLowerCase().includes(normalized) ||
-          voice.locale.toLowerCase().includes(normalized)
+          voice.name.toLowerCase().includes(normalized) ||
+          voice.id.toLowerCase().includes(normalized) ||
+          `${voice.language}-${voice.region}`.toLowerCase().includes(normalized)
         );
       });
     }
@@ -155,10 +155,11 @@ function VoiceSelectorComponent({
   const groupedVoices = useMemo(() => {
     const groups = new Map<string, WorkerVoice[]>();
     limitedVoices.forEach((voice) => {
-      if (!groups.has(voice.locale)) {
-        groups.set(voice.locale, []);
+      const locale = `${voice.language}-${voice.region}`;
+      if (!groups.has(locale)) {
+        groups.set(locale, []);
       }
-      groups.get(voice.locale)!.push(voice);
+      groups.get(locale)!.push(voice);
     });
 
     return Array.from(groups.entries())
@@ -171,14 +172,14 @@ function VoiceSelectorComponent({
         return {
           locale,
           label,
-          entries: entries.sort((a, b) => a.friendlyName.localeCompare(b.friendlyName)),
+          entries: entries.sort((a, b) => a.name.localeCompare(b.name)),
         };
       })
       .sort((a, b) => a.locale.localeCompare(b.locale));
   }, [limitedVoices, languages, languageFormatter]);
 
   const selectedVoiceMeta = useMemo(
-    () => voices.find((voice) => voice.shortName === selectedVoice) || null,
+    () => voices.find((voice) => voice.id === selectedVoice) || null,
     [voices, selectedVoice]
   );
 
@@ -197,13 +198,13 @@ function VoiceSelectorComponent({
   };
 
   const handlePreview = async (voice: WorkerVoice) => {
-    if (playingVoice === voice.shortName) {
+    if (playingVoice === voice.id) {
       stopPlayback();
       return;
     }
 
     stopPlayback();
-    setPlayingVoice(voice.shortName);
+    setPlayingVoice(voice.id);
 
     try {
       const languageDisplay =
@@ -215,7 +216,7 @@ function VoiceSelectorComponent({
       const response = await generateSpeechWithSubtitles(
         {
           input: demoText,
-          voice: voice.shortName,
+          voice: voice.id,
         },
         false
       );
@@ -241,7 +242,7 @@ function VoiceSelectorComponent({
       {selectedVoiceMeta && (
         <SelectedVoiceCard
           voice={selectedVoiceMeta}
-          playing={playingVoice === selectedVoiceMeta.shortName}
+          playing={playingVoice === selectedVoiceMeta.id}
           onPreview={handlePreview}
           languageFormatter={languageFormatter ?? undefined}
         />
@@ -329,13 +330,13 @@ function VoiceSelectorComponent({
                   {group.label}
                 </ListSubheader>
                 {group.entries.map((voice) => {
-                  const isSelected = voice.shortName === selectedVoice;
-                  const isPlaying = voice.shortName === playingVoice;
+                  const isSelected = voice.id === selectedVoice;
+                  const isPlaying = voice.id === playingVoice;
                   const presentation = formatListPrimaryLabel(voice);
 
                   return (
                     <ListItem
-                      key={voice.shortName}
+                      key={voice.id}
                       disablePadding
                       secondaryAction={
                         <Tooltip title={isPlaying ? 'Stop preview' : 'Play sample'} arrow>
@@ -356,7 +357,7 @@ function VoiceSelectorComponent({
                       }
                     >
                       <ListItemButton
-                        onClick={() => onVoiceChange(voice.shortName)}
+                        onClick={() => onVoiceChange(voice.id)}
                         selected={isSelected}
                         sx={{
                           borderRadius: isSelected ? 2 : 0,
@@ -385,7 +386,7 @@ function VoiceSelectorComponent({
                             }
                             secondary={
                               <Typography variant="caption" color="text.secondary" noWrap>
-                                {presentation.descriptor || voice.shortName}
+                                {presentation.descriptor || voice.id}
                               </Typography>
                             }
                           />

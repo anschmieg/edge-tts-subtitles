@@ -256,13 +256,12 @@ function handleOptions(origin: string | null, env: any): Response {
 }
 
 type VoiceSummary = {
-	shortName: string;
-	friendlyName: string;
-	locale: string;
+	id: string;
+	name: string;
 	language: string;
+	region: string;
 	gender: Voice['Gender'];
 	isMultilingual: boolean;
-	displayName: string;
 };
 
 let cachedVoices: { expiresAt: number; data: VoiceSummary[] } | null = null;
@@ -279,29 +278,31 @@ async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 
 	const rawVoices = await listVoices();
 	const summaries = rawVoices.map<VoiceSummary>((voice) => {
-		const language = voice.Locale.split('-')[0] || voice.Locale;
+		const [language, region] = voice.Locale.split('-');
 		const friendlyName = voice.FriendlyName || voice.ShortName;
-		const displayName = `${friendlyName} (${voice.Locale})`;
+		// Extract voice name from shortName: e.g., "af-ZA-AdriNeural" -> "Adri"
+		const shortNameParts = voice.ShortName.split('-');
+		const voiceNameRaw = shortNameParts[2] || voice.ShortName;
+		const name = voiceNameRaw.replace(/Neural$/, '').replace(/Multilingual$/, '');
 		const isMultilingual =
 			/Multilingual/i.test(voice.ShortName) ||
 			/Multilingual/i.test(voice.Name) ||
 			/Multilingual/i.test(friendlyName);
 
 		return {
-			shortName: voice.ShortName,
-			friendlyName,
-			locale: voice.Locale,
-			language,
+			id: voice.ShortName,
+			name,
+			language: language || voice.Locale,
+			region: region || '',
 			gender: voice.Gender,
 			isMultilingual,
-			displayName,
 		};
 	});
 
 	summaries.sort((a, b) => {
 		if (a.language !== b.language) return a.language.localeCompare(b.language);
-		if (a.locale !== b.locale) return a.locale.localeCompare(b.locale);
-		return a.friendlyName.localeCompare(b.friendlyName);
+		if (a.region !== b.region) return a.region.localeCompare(b.region);
+		return a.name.localeCompare(b.name);
 	});
 
 	cachedVoices = {

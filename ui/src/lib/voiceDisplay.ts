@@ -9,24 +9,12 @@ export function deriveVoicePresentation(
   voice: WorkerVoice,
   languageFormatter?: Intl.DisplayNames
 ) {
-  const friendly = voice.friendlyName.replace(/^Microsoft\s+/i, '').trim();
-  const [nameSegment, languageSegment] = friendly.split(' - ');
-  const shortName = voice.shortName.split('-').pop() ?? voice.shortName;
-  const baseShort = shortName.replace(/Multilingual/gi, '').replace(/Neural/gi, '');
-  const baseName = insertSpaces(baseShort).trim();
-  const isMultilingual =
-    voice.isMultilingual ||
-    /Multilingual/i.test(shortName) ||
-    /Multilingual/i.test(friendly);
-  const descriptor =
-    nameSegment?.replace(/Multilingual/gi, '').replace(baseName, '').trim() ?? '';
+  const baseName = voice.name;
+  const isMultilingual = voice.isMultilingual;
+  const descriptor = ''; // No longer needed since name is already clean
 
-  const [languageCode, regionCode] = voice.locale.split('-');
-  const languageName =
-    languageFormatter?.of(languageCode) ||
-    languageSegment?.split('(')[0].trim() ||
-    languageCode;
-  const regionName = resolveRegionName(regionCode, languageSegment);
+  const languageName = languageFormatter?.of(voice.language) || voice.language;
+  const regionName = resolveRegionName(voice.region);
 
   return {
     baseName,
@@ -60,29 +48,20 @@ export function formatListPrimaryLabel(voice: WorkerVoice) {
   };
 }
 
-function insertSpaces(value: string) {
-  return value.replace(/([a-z])([A-Z])/g, '$1 $2');
-}
 
-function extractRegionFromSegment(segment?: string) {
-  if (!segment) return '';
-  const match = segment.match(/\(([^)]+)\)/);
-  return match ? match[1] : '';
-}
-
-function resolveRegionName(regionCode?: string, languageSegment?: string): string {
+function resolveRegionName(regionCode?: string): string {
   if (!regionCode) {
-    return extractRegionFromSegment(languageSegment);
+    return '';
   }
 
   const normalized = regionCode.toUpperCase();
   if (!/^[A-Z]{2,3}$/.test(normalized)) {
-    return extractRegionFromSegment(languageSegment) || '';
+    return '';
   }
 
   try {
-    return regionFormatter?.of(normalized) ?? extractRegionFromSegment(languageSegment) ?? '';
+    return regionFormatter?.of(normalized) ?? '';
   } catch {
-    return extractRegionFromSegment(languageSegment) ?? '';
+    return '';
   }
 }

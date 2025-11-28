@@ -2,13 +2,12 @@ import { MOCK_PAYLOAD, resolveWorkerBaseUrl } from '../constants';
 import { MOCK_SUBTITLE_CONTENT, MOCK_AUDIO_BASE64 } from '../constants';
 
 export interface WorkerVoice {
-  shortName: string;
-  friendlyName: string;
-  locale: string;
+  id: string;
+  name: string;
   language: string;
+  region: string;
   gender: 'Female' | 'Male';
   isMultilingual: boolean;
-  displayName: string;
 }
 
 export interface TTSRequest {
@@ -155,13 +154,12 @@ async function fetchVoicesOnce(): Promise<WorkerVoice[]> {
     // UI doesn't break when the worker is not running locally.
     return [
       {
-        shortName: 'en-US-EmmaMultilingualNeural',
-        friendlyName: 'Emma (Multilingual)',
-        locale: 'en-US',
+        id: 'en-US-EmmaMultilingualNeural',
+        name: 'Emma',
         language: 'en',
+        region: 'US',
         gender: 'Female',
         isMultilingual: true,
-        displayName: 'Emma',
       },
     ];
   }

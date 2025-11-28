@@ -9,7 +9,7 @@ export const openApiSpec = {
     '/v1/voices': {
       get: {
         summary: 'List all available voices',
-        description: 'Returns a list of all available text-to-speech voices with their properties including language, locale, gender, and display names.',
+        description: 'Returns a list of all available text-to-speech voices with their properties including language, region, gender, and multilingual support.',
         responses: {
           '200': {
             description: 'List of voices',
@@ -23,15 +23,14 @@ export const openApiSpec = {
                       items: {
                         type: 'object',
                         properties: {
-                          shortName: { type: 'string', description: 'Short name identifier for the voice' },
-                          friendlyName: { type: 'string', description: 'Human-readable friendly name' },
-                          locale: { type: 'string', description: 'Locale code (e.g., en-US)' },
+                          id: { type: 'string', description: 'Unique identifier for the voice' },
+                          name: { type: 'string', description: 'Clean voice name (e.g., Emma)' },
                           language: { type: 'string', description: 'Language code (e.g., en)' },
+                          region: { type: 'string', description: 'Region code (e.g., US)' },
                           gender: { type: 'string', enum: ['Male', 'Female'], description: 'Voice gender' },
                           isMultilingual: { type: 'boolean', description: 'Whether the voice supports multiple languages' },
-                          displayName: { type: 'string', description: 'Formatted display name with locale' },
                         },
-                        required: ['shortName', 'friendlyName', 'locale', 'language', 'gender', 'isMultilingual', 'displayName'],
+                        required: ['id', 'name', 'language', 'region', 'gender', 'isMultilingual'],
                       },
                     },
                   },

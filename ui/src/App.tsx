@@ -178,7 +178,7 @@ function App() {
       setVoices(data);
       setVoicesFetched(true);
       if (!voiceManuallySet && data.length && !voice) {
-        setVoice(data[0].shortName);
+        setVoice(data[0].id);
       }
     } catch (err) {
       console.error('Failed to load voices', err);
@@ -228,8 +228,8 @@ function App() {
     if (!voices.length) return;
     const defaultVoice =
       voices.find((candidate) => candidate.isMultilingual) ?? voices[0];
-    if (defaultVoice && voice !== defaultVoice.shortName) {
-      setVoice(defaultVoice.shortName);
+    if (defaultVoice && voice !== defaultVoice.id) {
+      setVoice(defaultVoice.id);
     }
   }, [voices, voice, voiceManuallySet]);
 
@@ -410,7 +410,7 @@ function App() {
   }, [activeTab, result, subtitlesEnabled, subtitleFormat, optimizeForTTS, addSSML]);
 
   const selectedVoiceMeta = useMemo(
-    () => voices.find((candidate) => candidate.shortName === voice) ?? null,
+    () => voices.find((candidate) => candidate.id === voice) ?? null,
     [voices, voice]
   );
 
@@ -525,10 +525,10 @@ function App() {
     if (!pool.length) {
       return;
     }
-    if (!voice || !pool.some((voiceItem) => voiceItem.shortName === voice)) {
+    if (!voice || !pool.some((voiceItem) => voiceItem.id === voice)) {
       const fallback =
         pool.find((voiceItem) => voiceItem.isMultilingual) ?? pool[0];
-      setVoice(fallback.shortName);
+      setVoice(fallback.id);
     }
   };
 
