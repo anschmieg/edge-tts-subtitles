@@ -157,6 +157,7 @@ Enable "Mock mode" in the UI to test without the worker.
 - **TTS Engine**: `edge-tts-universal` package (isomorphic build)
 - **Audio Format**: MP3 (24kHz, 48kbps, mono)
 - **Subtitle Formats**: SRT (SubRip) and VTT (WebVTT)
+- **Voices**:  supports Microsoft online voices. If no voice is provided in the request, defaults to Emma (multilingual, en-US)
 
 ## License
 
