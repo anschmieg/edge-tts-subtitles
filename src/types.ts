@@ -1,7 +1,7 @@
 // Request interface for TTS endpoints
 export interface TTSRequest {
 	input: string;
-	voice: string;
+	voice?: string; // Optional - defaults to a multilingual voice if not provided or invalid
 	subtitle_format?: 'srt' | 'vtt';
 	// Optional prosody controls (values expected as CSS-like strings or numeric where appropriate)
 	rate?: string; // e.g. '1.0', '1.2', or 'slow', 'fast'
