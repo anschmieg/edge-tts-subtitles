@@ -309,12 +309,10 @@ async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 }
 
 /**
- * Get the default multilingual voice to use when no voice is specified or an invalid voice is provided.
+ * Get the default multilingual voice from the provided voice list.
  * Returns the first available multilingual voice, preferring en-US-EmmaMultilingualNeural if available.
  */
-async function getDefaultVoice(): Promise<string> {
-	const voices = await getVoiceSummaries();
-	
+function getDefaultVoiceFromList(voices: VoiceSummary[]): string {
 	// Prefer en-US-EmmaMultilingualNeural as the default
 	const preferred = voices.find((v) => v.shortName === 'en-US-EmmaMultilingualNeural');
 	if (preferred) {
@@ -341,16 +339,17 @@ async function getDefaultVoice(): Promise<string> {
  * Returns the validated voice name if it exists, otherwise returns the default voice.
  */
 async function validateAndGetVoice(requestedVoice?: string): Promise<string> {
+	const voices = await getVoiceSummaries();
+	
 	// If no voice provided, use default
 	if (!requestedVoice || !requestedVoice.trim()) {
-		return await getDefaultVoice();
+		return getDefaultVoiceFromList(voices);
 	}
 	
-	const voices = await getVoiceSummaries();
 	const voiceExists = voices.some((v) => v.shortName === requestedVoice);
 	
 	// If voice exists, use it; otherwise use default
-	return voiceExists ? requestedVoice : await getDefaultVoice();
+	return voiceExists ? requestedVoice : getDefaultVoiceFromList(voices);
 }
 
 export default {
