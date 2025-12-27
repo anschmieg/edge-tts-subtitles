@@ -268,6 +268,9 @@ type VoiceSummary = {
 let cachedVoices: { expiresAt: number; data: VoiceSummary[] } | null = null;
 const VOICE_CACHE_DURATION_MS = 1000 * 60 * 60 * 12; // 12 hours
 
+// Default voice to use when no voice is specified or an invalid voice is provided
+const DEFAULT_VOICE = 'en-US-EmmaMultilingualNeural';
+
 async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 	const now = Date.now();
 	if (cachedVoices && cachedVoices.expiresAt > now) {
@@ -306,6 +309,52 @@ async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 		data: summaries,
 	};
 	return summaries;
+}
+
+/**
+ * Get the default multilingual voice from the provided voice list.
+ * Returns the first available multilingual voice, preferring DEFAULT_VOICE if available.
+ */
+function getDefaultVoiceFromList(voices: VoiceSummary[]): string {
+	// Prefer the configured default voice
+	const preferred = voices.find((v) => v.shortName === DEFAULT_VOICE);
+	if (preferred) {
+		return preferred.shortName;
+	}
+	
+	// Otherwise use the first multilingual voice
+	const multilingual = voices.find((v) => v.isMultilingual);
+	if (multilingual) {
+		return multilingual.shortName;
+	}
+	
+	// Fallback to the first available voice if no multilingual voices exist
+	if (voices.length > 0) {
+		return voices[0].shortName;
+	}
+	
+	// Ultimate fallback - this should never happen but provides a safe default
+	return DEFAULT_VOICE;
+}
+
+/**
+ * Validate if a voice exists in the available voice list.
+ * Returns the validated voice name if it exists, otherwise returns the default voice.
+ */
+async function validateAndGetVoice(requestedVoice?: string): Promise<string> {
+	const voices = await getVoiceSummaries();
+	
+	// If no voice provided or voice doesn't exist, use default
+	if (!requestedVoice || !requestedVoice.trim()) {
+		return getDefaultVoiceFromList(voices);
+	}
+	
+	const voiceExists = voices.some((v) => v.shortName === requestedVoice);
+	if (!voiceExists) {
+		return getDefaultVoiceFromList(voices);
+	}
+	
+	return requestedVoice;
 }
 
 export default {
@@ -386,12 +435,15 @@ export default {
 
 					const body = (await request.json()) as TTSRequest;
 
-					if (!body.input || !body.voice) {
-						return new Response(JSON.stringify({ error: 'Missing required fields: input and voice' }), {
+					if (!body.input) {
+						return new Response(JSON.stringify({ error: 'Missing required field: input' }), {
 							status: 400,
 							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 						});
 					}
+
+					// Validate and get voice - use default if not provided or invalid
+					const voice = await validateAndGetVoice(body.voice);
 
 					// Accept optional raw_ssml. If provided, use it directly as the
 					// synthesis input. If it doesn't look like a full SSML document,
@@ -432,7 +484,7 @@ export default {
 						// whether we're actually sending SSML to the TTS library.
 						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
 					}
-					const tts = new EdgeTTS(synthesisInput, body.voice, prosodyOptions);
+					const tts = new EdgeTTS(synthesisInput, voice, prosodyOptions);
 					const result = await tts.synthesize();
 
 					const audioBuffer = await result.audio.arrayBuffer();
@@ -458,12 +510,15 @@ export default {
 
 					const body = (await request.json()) as TTSRequest;
 
-					if (!body.input || !body.voice) {
-						return new Response(JSON.stringify({ error: 'Missing required fields: input and voice' }), {
+					if (!body.input) {
+						return new Response(JSON.stringify({ error: 'Missing required field: input' }), {
 							status: 400,
 							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 						});
 					}
+
+					// Validate and get voice - use default if not provided or invalid
+					const voice = await validateAndGetVoice(body.voice);
 
 					const subtitleFormat = body.subtitle_format || 'srt';
 
@@ -509,7 +564,7 @@ export default {
 					if (debugEnabled) {
 						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
 					}
-					const tts = new EdgeTTS(synthesisInput, body.voice, prosodyOptions);
+					const tts = new EdgeTTS(synthesisInput, voice, prosodyOptions);
 					const result = await tts.synthesize();
 
 					const audioBuffer = await result.audio.arrayBuffer();
