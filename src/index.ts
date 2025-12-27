@@ -268,6 +268,9 @@ type VoiceSummary = {
 let cachedVoices: { expiresAt: number; data: VoiceSummary[] } | null = null;
 const VOICE_CACHE_DURATION_MS = 1000 * 60 * 60 * 12; // 12 hours
 
+// Default voice to use when no voice is specified or an invalid voice is provided
+const DEFAULT_VOICE = 'en-US-EmmaMultilingualNeural';
+
 async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 	const now = Date.now();
 	if (cachedVoices && cachedVoices.expiresAt > now) {
@@ -310,11 +313,11 @@ async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 
 /**
  * Get the default multilingual voice from the provided voice list.
- * Returns the first available multilingual voice, preferring en-US-EmmaMultilingualNeural if available.
+ * Returns the first available multilingual voice, preferring DEFAULT_VOICE if available.
  */
 function getDefaultVoiceFromList(voices: VoiceSummary[]): string {
-	// Prefer en-US-EmmaMultilingualNeural as the default
-	const preferred = voices.find((v) => v.shortName === 'en-US-EmmaMultilingualNeural');
+	// Prefer the configured default voice
+	const preferred = voices.find((v) => v.shortName === DEFAULT_VOICE);
 	if (preferred) {
 		return preferred.shortName;
 	}
@@ -331,7 +334,7 @@ function getDefaultVoiceFromList(voices: VoiceSummary[]): string {
 	}
 	
 	// Ultimate fallback - this should never happen but provides a safe default
-	return 'en-US-EmmaMultilingualNeural';
+	return DEFAULT_VOICE;
 }
 
 /**
@@ -341,15 +344,17 @@ function getDefaultVoiceFromList(voices: VoiceSummary[]): string {
 async function validateAndGetVoice(requestedVoice?: string): Promise<string> {
 	const voices = await getVoiceSummaries();
 	
-	// If no voice provided, use default
+	// If no voice provided or voice doesn't exist, use default
 	if (!requestedVoice || !requestedVoice.trim()) {
 		return getDefaultVoiceFromList(voices);
 	}
 	
 	const voiceExists = voices.some((v) => v.shortName === requestedVoice);
+	if (!voiceExists) {
+		return getDefaultVoiceFromList(voices);
+	}
 	
-	// If voice exists, use it; otherwise use default
-	return voiceExists ? requestedVoice : getDefaultVoiceFromList(voices);
+	return requestedVoice;
 }
 
 export default {
