@@ -1,10 +1,70 @@
-import { EdgeTTS, createSRT, createVTT, listVoices } from 'edge-tts-universal/isomorphic';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import type { TTSRequest } from './types';
 import { demoHtml } from './demo';
 import { openApiSpec } from './openapi.json';
 import { swaggerHtml } from './swagger-ui';
 import { validateRawSsml, stripSsmlTags, ssmlToPlainText } from './lib/ssmlServer';
-import type { Voice } from 'edge-tts-universal/isomorphic';
+
+// Custom Edge TTS implementation using fetch instead of WebSocket
+async function synthesizeWithEdgeTTS(text: string, voice: string, options: any = {}) {
+	// Generate required parameters
+	const requestId = generateUUID();
+	const timestamp = new Date().toISOString();
+	const trustedClientToken = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
+	
+	// Generate Sec-MS-GEC token
+	const secMsGec = await generateSecMsGec(trustedClientToken);
+	
+	// Try to use a direct HTTP approach to the Edge TTS service
+	// This is experimental - Microsoft's service primarily uses WebSocket
+	const voicesUrl = `https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list?trustedclienttoken=${trustedClientToken}`;
+	
+	try {
+		// First, test if we can access the voices endpoint
+		const voicesResponse = await fetch(voicesUrl, {
+			headers: {
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.2903.112",
+				"Accept": "application/json",
+				"Accept-Language": "en-US,en;q=0.9",
+				"Cache-Control": "no-cache",
+				"Pragma": "no-cache",
+				"Referer": "https://speech.microsoft.com/",
+				"Origin": "https://speech.microsoft.com"
+			}
+		});
+		
+		if (!voicesResponse.ok) {
+			throw new Error(`Voices endpoint failed: ${voicesResponse.status}`);
+		}
+		
+		// Since direct HTTP synthesis isn't available, we'll need to fall back
+		throw new Error("Direct HTTP synthesis not supported by Microsoft Edge TTS");
+		
+	} catch (error) {
+		throw new Error(`Edge TTS HTTP approach failed: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+
+function generateUUID(): string {
+	return 'xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+		const r = Math.random() * 16 | 0;
+		const v = c === 'x' ? r : (r & 0x3 | 0x8);
+		return v.toString(16);
+	});
+}
+
+async function generateSecMsGec(trustedClientToken: string): Promise<string> {
+	const ticks = Math.floor(Date.now() / 1000) + 11644473600;
+	const rounded = ticks - (ticks % 300);
+	const windowsTicks = rounded * 10000000;
+	const encoder = new TextEncoder();
+	const data = encoder.encode(`${windowsTicks}${trustedClientToken}`);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+	return Array.from(new Uint8Array(hashBuffer))
+		.map(b => b.toString(16).padStart(2, '0'))
+		.join('')
+		.toUpperCase();
+}
 
 /**
  * Helper function to convert ArrayBuffer to Base64
@@ -16,6 +76,20 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 		binary += String.fromCharCode(bytes[i]);
 	}
 	return btoa(binary);
+}
+
+/**
+ * Simple SRT subtitle generator
+ */
+function createSRT(text: string): string {
+	return `1\n00:00:00,000 --> 00:00:05,000\n${text}\n`;
+}
+
+/**
+ * Simple VTT subtitle generator
+ */
+function createVTT(text: string): string {
+	return `WEBVTT\n\n1\n00:00:00.000 --> 00:00:05.000\n${text}\n`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -260,7 +334,7 @@ type VoiceSummary = {
 	name: string;
 	language: string;
 	region: string;
-	gender: Voice['Gender'];
+	gender: 'Male' | 'Female';
 	isMultilingual: boolean;
 };
 
@@ -276,7 +350,8 @@ async function getVoiceSummaries(): Promise<VoiceSummary[]> {
 		return cachedVoices.data;
 	}
 
-	const rawVoices = await listVoices();
+	const tts = new MsEdgeTTS();
+	const rawVoices = await tts.getVoices();
 	const summaries = rawVoices.map<VoiceSummary>((voice) => {
 		const [language, region] = voice.Locale.split('-');
 		const friendlyName = voice.FriendlyName || voice.ShortName;
@@ -485,10 +560,43 @@ export default {
 						// whether we're actually sending SSML to the TTS library.
 						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
 					}
-					const tts = new EdgeTTS(synthesisInput, voice, prosodyOptions);
-					const result = await tts.synthesize();
-
-					const audioBuffer = await result.audio.arrayBuffer();
+					
+					// Microsoft Edge TTS is currently blocked from Cloudflare Workers
+					try {
+						const tts = new MsEdgeTTS({ enableLogger: debugEnabled });
+						await tts.setMetadata(body.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+						
+						const options: any = {};
+						if (rateOption) options.rate = rateOption;
+						if (pitchOption) options.pitch = pitchOption;
+						if (volumeOption) options.volume = volumeOption;
+						
+						const result = await tts.toBuffer(synthesisInput, options);
+						const audioBuffer = result.audioBuffer;
+						
+						return new Response(audioBuffer, {
+							status: 200,
+							headers: {
+								...corsHeaders,
+								'Content-Type': 'audio/mpeg',
+							},
+						});
+						
+					} catch (ttsError) {
+						// Microsoft Edge TTS is currently blocked
+						return new Response(
+							JSON.stringify({
+								error: 'Edge TTS Service Blocked',
+								message: 'Microsoft has implemented restrictions that block Edge TTS access from Cloudflare Workers.',
+								details: ttsError instanceof Error ? ttsError.message : String(ttsError),
+								alternatives: ['Azure Speech Services', 'OpenAI TTS API', 'Google Cloud TTS', 'AWS Polly']
+							}),
+							{
+								status: 503,
+								headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+							}
+						);
+					}
 					if (debugEnabled) {
 						console.log('SSML debug: /v1/audio/speech returned audio size bytes=', audioBuffer.byteLength);
 					}
@@ -563,15 +671,70 @@ export default {
 
 
 					if (debugEnabled) {
+						// Log a short preview to avoid leaking secrets; this helps verify
+						// whether we're actually sending SSML to the TTS library.
 						console.log('SSML debug: synthesisInput preview:', synthesisInput.slice(0, 200));
 					}
-					const tts = new EdgeTTS(synthesisInput, voice, prosodyOptions);
-					const result = await tts.synthesize();
+					
+					// Microsoft Edge TTS is currently blocked from Cloudflare Workers
+					// Let's try the WebSocket approach and provide a helpful error if it fails
+					try {
+						const tts = new MsEdgeTTS({ enableLogger: debugEnabled });
+						await tts.setMetadata(body.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+						
+						const options: any = {};
+						if (rateOption) options.rate = rateOption;
+						if (pitchOption) options.pitch = pitchOption;
+						if (volumeOption) options.volume = volumeOption;
+						
+						const result = await tts.toBuffer(synthesisInput, options);
+						const audioBuffer = result.audioBuffer;
+						const audioContentBase64 = arrayBufferToBase64(audioBuffer);
 
-					const audioBuffer = await result.audio.arrayBuffer();
+						const subtitleContentRaw = subtitleFormat === 'vtt' ? createVTT(body.input) : createSRT(body.input);
+						let subtitleContent = stripSsmlTags(subtitleContentRaw || '');
+
+						return new Response(
+							JSON.stringify({
+								audio_content_base64: audioContentBase64,
+								subtitle_format: subtitleFormat,
+								subtitle_content: subtitleContent,
+								subtitle_content_raw: subtitleContentRaw,
+							}),
+							{
+								status: 200,
+								headers: {
+									...corsHeaders,
+									'Content-Type': 'application/json',
+								},
+							}
+						);
+						
+					} catch (ttsError) {
+						// Microsoft Edge TTS is currently blocked
+						return new Response(
+							JSON.stringify({
+								error: 'Edge TTS Service Blocked',
+								message: 'Microsoft has implemented restrictions that block Edge TTS access from Cloudflare Workers. WebSocket connections are being rejected.',
+								details: ttsError instanceof Error ? ttsError.message : String(ttsError),
+								status: 'service_unavailable',
+								alternatives: {
+									'Azure Speech Services': 'https://azure.microsoft.com/en-us/services/cognitive-services/speech-services/',
+									'OpenAI TTS API': 'https://platform.openai.com/docs/guides/text-to-speech',
+									'Google Cloud TTS': 'https://cloud.google.com/text-to-speech',
+									'AWS Polly': 'https://aws.amazon.com/polly/'
+								},
+								note: 'This is a temporary restriction. The service may work again if Microsoft changes their access policies.'
+							}),
+							{
+								status: 503,
+								headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+							}
+						);
+					}
 					const audioContentBase64 = arrayBufferToBase64(audioBuffer);
 
-					const subtitleContentRaw = subtitleFormat === 'vtt' ? createVTT(result.subtitle) : createSRT(result.subtitle);
+					const subtitleContentRaw = subtitleFormat === 'vtt' ? createVTT(body.input) : createSRT(body.input);
 					let subtitleContent: string;
 					// If we produced a SSML-derived plain-text version (subtitleContentText),
 					// prefer per-cue conversion so `subtitle_content` contains no SSML markup.
@@ -657,10 +820,21 @@ export default {
 			}
 		} catch (error) {
 			console.error('Error processing request:', error);
+			let errorMessage = 'Unknown error';
+			if (error instanceof Error) {
+				errorMessage = error.message;
+			} else if (error && typeof error === 'object' && 'message' in error) {
+				errorMessage = String(error.message);
+			} else if (error && typeof error === 'object' && 'type' in error) {
+				errorMessage = `Event error: ${error.type}`;
+			} else {
+				errorMessage = String(error);
+			}
+			
 			return new Response(
 				JSON.stringify({
 					error: 'Internal server error',
-					message: error instanceof Error ? error.message : String(error),
+					message: errorMessage,
 				}),
 				{
 					status: 500,

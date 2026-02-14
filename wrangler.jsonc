@@ -5,7 +5,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "edge-tts-subtitles",
-	"main": "src/index.ts",
 	"compatibility_date": "2025-10-11",
 	"observability": {
 		"enabled": true
